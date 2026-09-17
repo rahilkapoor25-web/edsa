@@ -1,0 +1,161 @@
+# EDSA — Automated Exam Duty & Seating Allocation System
+
+## What the system does
+
+EDSA is a Java web application that turns four spreadsheets — students, rooms, faculty,
+timetable — into a complete exam seating plan and invigilation duty roster that satisfies
+every rule the examination office follows. The coordinator uploads the CSVs, clicks once,
+and gets a plan back.
+
+Five pages: **Import** (upload the four CSVs, show row counts and malformed-row warnings),
+**Solve** (start the run, show progress and the violation count falling to zero),
+**Plan viewer** (seating and duty tables, filter by room or date), **Disruption** (mark a
+faculty member absent, show a diff of what the repairer changed), **Reports** (preview and
+download seating charts, attendance sheets, workload summary).
+
+Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
+
+## Stack
+
+| Technology | Used for |
+| --- | --- |
+| Java 17 (LTS) | The whole application |
+| Spring Boot + Thymeleaf | HTTP layer and the five pages, server-rendered HTML + minimal CSS |
+| JDBC | All database access, written as plain Java |
+| H2 (now), MySQL (later) | Students, rooms, faculty, timetable, saved plans, duty history |
+| CSV + `BufferedReader` | Loading the four input files |
+| Threads + `synchronized` | Running the solver off the request thread, background rule checking |
+| Maven | Build, dependencies, test execution |
+| JUnit 5 | Unit and integration tests |
+| JaCoCo | Statement and branch coverage reports |
+| GitHub Actions | Continuous integration |
+
+**Not used:** no ORM — no Hibernate, no JPA, no `spring-boot-starter-data-jpa`. Database
+access is written directly in JDBC. No security framework either; the prototype runs on the
+college network with no login system, recorded as a scope limitation in the SRS.
+
+The database is H2 in-memory today (`src/main/resources/application.properties`) and moves
+to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
+the datasource properties — no code change.
+
+## Package architecture — the one-way rule
+
+The code sits in three packages, each with one job. `edsa.web` shows the pages, `edsa.data`
+reads and writes files, and `edsa.core` makes all the decisions.
+
+```
+Browser  →  edsa.web    controllers, templates
+            edsa.web    →  edsa.data    CSV, reports, saved plans
+            edsa.web    →  edsa.core    model, rules, solver
+            edsa.data   →  edsa.core
+            edsa.core   →  (nothing — no imports upward)
+```
+
+> "Arrows point one way only: the pages may use the core, but the core never uses the pages."
+
+Concretely:
+
+- **`edsa.core` must never import `edsa.web`, `edsa.data`, or Spring** (no
+  `org.springframework.*`), and no web, JDBC or template types. Plain Java only.
+- `edsa.data` may import `edsa.core`. It must never import `edsa.web`.
+- `edsa.web` may import both.
+
+That one-way rule is the reason the decision-making can be tested without opening a browser,
+and the reason the pages could be replaced later without touching the rules. It is also what
+makes `edsa.core.CliRunner` work headlessly — "because `edsa.core` has no web dependency."
+
+If a change seems to need an upward import, the class is in the wrong package. Move the
+class, don't add the import.
+
+## Controllers decide nothing
+
+> "One rule for this folder: pages never decide anything. A page takes the request, asks the
+> core, and shows the answer. Any rule about seniority or capacity written inside a page is
+> in the wrong folder."
+
+No controller in `edsa.web` contains allocation or rule logic. A controller binds the
+request, calls into `edsa.core` (or `edsa.data`), puts the result on the model, and picks a
+view. Anything that decides who sits where, who invigilates, whether a plan is legal, or how
+a plan is scored belongs in `edsa.core` — even a single `if` about capacity or seniority.
+
+## What lives where
+
+**`edsa.core` — the brain**
+
+- *The things:* `Student`, `Faculty`, `Room`, `ExamSlot`, `Seat`, `SeatingPlan`, `DutyRoster`,
+  `Assignment`, `WorkloadLedger`, and `Person` as a shared parent of `Student` and `Faculty`.
+- *The rules:* a `Constraint` interface, split into hard and soft, with one class per rule and
+  a `PlanChecker` that runs them all and lists what is broken.
+- *The decisions:* `GreedyAllocator` makes a first plan, `LocalSearchImprover` makes it fairer,
+  `AbsenceRepairer` handles a missing invigilator, `ValidatorThread` keeps checking the plan in
+  the background.
+- *The errors:* four custom exceptions — capacity, broken rules, no substitute available, bad
+  input files.
+
+**`edsa.data` — the files**
+
+Reads the four CSVs and checks every row, writes the reports out, loads them into the
+database, saves and reloads finished plans, keeps a log of what the coordinator did. A bad row
+is reported with the file name and line number rather than skipped quietly.
+
+**`edsa.web` — the five pages**
+
+Controllers and Thymeleaf templates for Import, Solve, Plan viewer, Disruption and Reports.
+The Solve page starts the job on a background thread and polls for progress, so the browser
+never sits waiting for the solver.
+
+## Rules and scoring
+
+**Hard constraints** decide whether a plan is allowed at all — anything that breaks one is
+thrown away immediately: no invigilator on their own subject's paper, no double-booking of a
+person or room, room capacity never exceeded, no two students of the same paper seated
+adjacent.
+
+**Soft constraints** are preferences that add penalty points. Adding up those points gives the
+plan a score, and **a lower score is a better plan**. That one number is the system's whole
+idea of "better".
+
+| Soft constraint | Penalty |
+| --- | --- |
+| Workload fairness | (duties − fair share)², per invigilator |
+| Consecutive slots | 5 per back-to-back pair |
+| Seniority cover | 10 per room with no senior |
+| Department spread | 3 per single-department room |
+
+These weights encode the examination office's priorities. They live in one configuration class
+so the ordering changes without touching the solver.
+
+**Determinism:** the same input always gives the same output. Nothing is learned or remembered
+between runs.
+
+## Adding a constraint later
+
+1. One new class implementing `Constraint`, in `edsa.core`.
+2. One JUnit test class proving it rejects what it should and accepts what it should.
+3. One line registering it in the constraint list, plus a weight if it is soft.
+4. One pull request.
+
+Nothing in the solver, the storage layer or the web layer changes. If adding a rule ever
+requires editing `GreedyAllocator`, the abstraction has leaked — investigate that before
+writing more rules.
+
+## Build and run
+
+```
+mvn clean test        compile and run every test, with a JaCoCo coverage report
+                      written to target/site/jacoco/index.html
+mvn spring-boot:run   start the web application on http://localhost:8080
+mvn clean package     build the executable jar into target/
+```
+
+Headless engine run, once the solver exists:
+
+```
+java -cp target/classes edsa.core.CliRunner students.csv rooms.csv faculty.csv timetable.csv
+```
+
+That command drives the engine without the web layer. It is how the solver is tested and
+demonstrated while the pages are still being built, and it works only as long as the one-way
+rule above holds.
+
+CI runs `mvn clean test` on every push and pull request (`.github/workflows/ci.yml`).
