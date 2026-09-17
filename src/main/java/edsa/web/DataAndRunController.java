@@ -16,13 +16,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 /** The landing page: what has been loaded, before anything is solved. */
 @Controller
-public class OverviewController {
+public class DataAndRunController {
 
     private final ExamData data = SampleData.load();
 
     @GetMapping("/")
-    public String overview(Model model) {
-        model.addAttribute("userName", "Coordinator");
+    public String dataAndRun(Model model) {
         model.addAttribute("studentCount", data.students().size());
         model.addAttribute("roomCount", data.rooms().size());
         model.addAttribute("facultyCount", data.faculty().size());
@@ -35,12 +34,7 @@ public class OverviewController {
         model.addAttribute("slots", data.slots());
         model.addAttribute("rooms", data.rooms());
         model.addAttribute("candidates", candidateCounts());
-        return "home";
-    }
-
-    @GetMapping("/logout")
-    public String logout() {
-        return "redirect:/";
+        return "data-and-run";
     }
 
     private Map<String, Integer> candidateCounts() {

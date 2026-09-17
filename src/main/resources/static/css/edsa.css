@@ -15,6 +15,10 @@
     --green-500: #1faa6c;
     --green-300: #5fd39b;
 
+    /* Only for things that went wrong */
+    --red-600: #b42318;
+    --red-400: #f0a9a2;
+
     --surface: #ffffff;
     --canvas: #f5f6f8;
     --line: #e3e6ea;
@@ -234,9 +238,18 @@ a.tab:hover {
     border-radius: var(--radius-sm);
     background: var(--green-600);
     color: #fff;
+    font-family: inherit;
     font-size: 14px;
     font-weight: 600;
     text-decoration: none;
+    cursor: pointer;
+}
+
+.button--full {
+    display: block;
+    width: 100%;
+    margin-top: 26px;
+    text-align: center;
 }
 
 .button:hover {
@@ -430,6 +443,75 @@ a.tab:hover {
     font-size: 20px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* ---------- Sign in ---------- */
+
+.signin {
+    display: flex;
+    justify-content: center;
+    padding: 76px var(--gutter) 110px;
+}
+
+.signin__card {
+    width: 100%;
+    max-width: 420px;
+    padding: 32px 34px 36px;
+}
+
+.signin__title {
+    margin: 14px 0 0;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.signin__lead {
+    margin: 8px 0 26px;
+    color: var(--ink-500);
+    font-size: 14px;
+}
+
+.field + .field {
+    margin-top: 20px;
+}
+
+.field .label {
+    margin-bottom: 8px;
+}
+
+.input {
+    width: 100%;
+    padding: 10px 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink-900);
+    font-family: inherit;
+    font-size: 15px;
+}
+
+.input::placeholder {
+    color: var(--ink-400);
+}
+
+.input:focus-visible {
+    outline: 2px solid var(--green-500);
+    outline-offset: 1px;
+}
+
+.input--error {
+    border-color: var(--red-400);
+}
+
+.input--error:focus-visible {
+    outline-color: var(--red-600);
+}
+
+.field__error {
+    margin: 9px 0 0;
+    color: var(--red-600);
+    font-size: 13px;
 }
 
 /* ---------- Footer ---------- */

@@ -12,6 +12,8 @@
 </head>
 <body>
 
+<!-- Signed out, there is nobody to name and nowhere to navigate, so the header carries the
+     brand alone. -->
 <header class="masthead">
     <div class="masthead__bar shell">
         <a class="brand" th:href="@{/}">
@@ -19,16 +21,16 @@
             <span class="brand__name">EDSA</span>
             <span class="brand__expansion">Exam Duty &amp; Seating Allocation</span>
         </a>
-        <div class="session">
-            <span class="session__user" th:text="${userName} ?: 'Coordinator'">Coordinator</span>
+        <div class="session" th:if="${session.userEmail}">
+            <span class="session__user mono" th:text="${session.userEmail}">coordinator@thapar.edu</span>
             <a class="session__logout" th:href="@{/logout}">Log out</a>
         </div>
     </div>
 
-    <nav class="tabs" aria-label="Sections">
+    <nav class="tabs" aria-label="Sections" th:if="${session.userEmail}">
         <div class="tabs__inner shell">
-            <a class="tab" th:classappend="${activeTab == 'overview'} ? 'tab--active'"
-               th:href="@{/}">Overview</a>
+            <a class="tab" th:classappend="${activeTab == 'data-and-run'} ? 'tab--active'"
+               th:href="@{/}">Data and Run</a>
             <span class="tab tab--soon" title="Not built yet">Import</span>
             <span class="tab tab--soon" title="Not built yet">Solve</span>
             <span class="tab tab--soon" title="Not built yet">Plan viewer</span>

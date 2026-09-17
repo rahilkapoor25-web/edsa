@@ -32,7 +32,8 @@ Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 
 **Not used:** no ORM — no Hibernate, no JPA, no `spring-boot-starter-data-jpa`. Database
 access is written directly in JDBC. No security framework either; the prototype runs on the
-college network with no login system, recorded as a scope limitation in the SRS.
+college network, recorded as a scope limitation in the SRS. See **The sign-in gate is not
+authentication** below.
 
 The database is H2 in-memory today (`src/main/resources/application.properties`) and moves
 to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
@@ -115,6 +116,19 @@ Styling is one stylesheet, `static/css/edsa.css`, with the colours, fonts and sp
 custom properties at the top — change them there, not in the rules below. Inter for text,
 JetBrains Mono for ids and counts (`.mono`, `.code`, `.is-numeric`), one green accent, white
 cards with thin borders on a light canvas. No JavaScript framework, and no CSS build step.
+
+## The sign-in gate is not authentication
+
+`LoginController` accepts **any** address ending in `@thapar.edu` with **any** non-empty
+password. Nothing is verified: there are no accounts, no password is ever checked, and
+nothing is stored beyond the typed address in the HTTP session. `SignedInFilter` sends
+requests without that session attribute to `/login`, and `/logout` invalidates the session.
+
+This is a placeholder gate so the pages have someone to name and a way out, not a security
+boundary. Anyone who can reach the server can type an address and get in. The missing
+security layer is recorded as a scope limitation in the SRS. Replacing it means replacing
+`LoginController` and `SignedInFilter` with a real mechanism, not extending them — and until
+that happens, do not put anything behind this gate that would matter if it were bypassed.
 
 ## Rules and scoring
 
