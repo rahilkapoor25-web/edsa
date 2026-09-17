@@ -1,0 +1,7 @@
+slot_id,paper_code,paper_name,exam_date,start_time,end_time
+E1,CS301,Data Structures,2026-11-10,09:30,12:30
+E2,EC301,Signals and Systems,2026-11-10,14:00,17:00
+E3,CS302,Operating Systems,2026-11-11,09:30,12:30
+E4,EC302,Digital Electronics,2026-11-11,14:00,17:00
+E5,CS303,Database Systems,2026-11-12,09:30,12:30
+E6,ME301,Thermodynamics,2026-11-12,14:00,17:00

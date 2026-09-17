@@ -1,0 +1,9 @@
+faculty_id,name,department,senior,subjects
+F01,Dr. Meera Nair,CSE,true,CS301;CS302
+F02,Dr. Anil Kulkarni,CSE,true,CS303
+F03,Prof. Sneha Rao,CSE,false,CS301
+F04,Dr. Rajesh Menon,ECE,true,EC301
+F05,Prof. Kavita Iyer,ECE,false,EC302
+F06,Prof. Sameer Joshi,ECE,false,EC301;EC302
+F07,Dr. Vandana Patil,ME,true,ME301
+F08,Prof. Arun Sethi,ME,false,

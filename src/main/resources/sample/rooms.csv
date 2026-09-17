@@ -1,0 +1,5 @@
+room_id,name,rows,columns,building
+R101,Lecture Hall 1,8,6,Block A
+R102,Lecture Hall 2,6,5,Block A
+R201,Seminar Hall,10,6,Block B
+R202,Drawing Hall,5,5,Block B
