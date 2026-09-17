@@ -16,6 +16,14 @@ public final class SeatingPlan {
         seatsBySlot.computeIfAbsent(slotId, key -> new ArrayList<>()).add(seat);
     }
 
+    /** Takes a seat back out, so a solver can try a placement and think better of it. */
+    public void remove(String slotId, Seat seat) {
+        List<Seat> seats = seatsBySlot.get(slotId);
+        if (seats != null) {
+            seats.remove(seat);
+        }
+    }
+
     public List<Seat> seatsFor(String slotId) {
         return Collections.unmodifiableList(seatsBySlot.getOrDefault(slotId, List.of()));
     }

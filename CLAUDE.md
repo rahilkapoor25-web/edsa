@@ -148,14 +148,19 @@ mvn spring-boot:run   start the web application on http://localhost:8080
 mvn clean package     build the executable jar into target/
 ```
 
-Headless engine run, once the solver exists:
+Headless engine run:
 
 ```
-java -cp target/classes edsa.core.CliRunner students.csv rooms.csv faculty.csv timetable.csv
+java -cp target/classes edsa.CliRunner
+java -cp target/classes edsa.CliRunner students.csv rooms.csv faculty.csv timetable.csv
 ```
+
+With no arguments it runs on the bundled sample files in `src/main/resources/sample`.
 
 That command drives the engine without the web layer. It is how the solver is tested and
 demonstrated while the pages are still being built, and it works only as long as the one-way
-rule above holds.
+rule above holds. The brief writes this entry point as `edsa.core.CliRunner`, but it loads
+CSVs and so needs `edsa.data`; it lives in the root `edsa` package beside `EdsaApplication`,
+as a composition root may depend on both layers while `edsa.core` stays clean.
 
 CI runs `mvn clean test` on every push and pull request (`.github/workflows/ci.yml`).

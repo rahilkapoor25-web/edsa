@@ -47,6 +47,13 @@ public final class ExamSlot {
         return endTime;
     }
 
+    /** True when the two slots run at the same time on the same day, so nobody can attend both. */
+    public boolean overlaps(ExamSlot other) {
+        return date.equals(other.date)
+                && startTime.isBefore(other.endTime)
+                && other.startTime.isBefore(endTime);
+    }
+
     @Override
     public String toString() {
         return paperCode + " on " + date + " at " + startTime;

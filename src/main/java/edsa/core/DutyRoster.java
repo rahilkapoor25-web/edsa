@@ -13,6 +13,11 @@ public final class DutyRoster {
         assignments.add(assignment);
     }
 
+    /** Takes a duty back off, so a solver can try a candidate and think better of it. */
+    public void remove(Assignment assignment) {
+        assignments.remove(assignment);
+    }
+
     public List<Assignment> all() {
         return Collections.unmodifiableList(assignments);
     }
