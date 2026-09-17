@@ -11,8 +11,10 @@ public final class RoomCapacityConstraint implements HardConstraint {
         return "Room capacity";
     }
 
+    /** One breach per room that is over its seat count in a slot. */
     @Override
-    public boolean isSatisfied(ExamPlan plan) {
+    public int breaches(ExamPlan plan) {
+        int over = 0;
         for (String slotId : plan.seating().slotIds()) {
             Map<String, Integer> seatedPerRoom = new HashMap<>();
             for (Seat seat : plan.seating().seatsFor(slotId)) {
@@ -20,10 +22,10 @@ public final class RoomCapacityConstraint implements HardConstraint {
             }
             for (Map.Entry<String, Integer> entry : seatedPerRoom.entrySet()) {
                 if (entry.getValue() > plan.data().room(entry.getKey()).capacity()) {
-                    return false;
+                    over++;
                 }
             }
         }
-        return true;
+        return over;
     }
 }

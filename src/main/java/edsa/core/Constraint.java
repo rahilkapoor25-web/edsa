@@ -15,4 +15,9 @@ public interface Constraint {
 
     /** Penalty points this plan earns. Lower is better; zero means nothing to complain about. */
     int penalty(ExamPlan plan);
+
+    /** How many separate things break this rule, for a checker that reports counts rather than a verdict. */
+    default int breaches(ExamPlan plan) {
+        return isSatisfied(plan) ? 0 : 1;
+    }
 }

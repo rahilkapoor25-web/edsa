@@ -105,6 +105,17 @@ Controllers and Thymeleaf templates for Import, Solve, Plan viewer, Disruption a
 The Solve page starts the job on a background thread and polls for progress, so the browser
 never sits waiting for the solver.
 
+Built so far: **Data and Run** (`/`) loads the four files or the bundled sample, shows row
+counts, computes a plan and lists every rule with pass/fail and a breach count; **Room
+schedule** (`/rooms`) shows the seating plan, filterable by room, with a CSV download at
+`/seating-plan.csv`; **Workloads** (`/workloads`) shows duties per invigilator. `Workspace`
+holds the loaded data and the computed plan for the whole application.
+
+Controllers ask the core and hand the answer to the template — no filtering, counting or
+grouping in a controller. When a page needs the plan shaped a particular way, that shape is a
+method on `ExamPlan` (`sittings()`, `sittingsIn(roomId)`, `workloads()`, `roomsUsed()`), not a
+loop in `edsa.web`.
+
 Every page goes through one layout, `templates/layout.html`, which owns the header and tab
 bar. A page supplies its content as a fragment:
 

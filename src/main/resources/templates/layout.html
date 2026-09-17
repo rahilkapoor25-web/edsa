@@ -31,9 +31,10 @@
         <div class="tabs__inner shell">
             <a class="tab" th:classappend="${activeTab == 'data-and-run'} ? 'tab--active'"
                th:href="@{/}">Data and Run</a>
-            <span class="tab tab--soon" title="Not built yet">Import</span>
-            <span class="tab tab--soon" title="Not built yet">Solve</span>
-            <span class="tab tab--soon" title="Not built yet">Plan viewer</span>
+            <a class="tab" th:classappend="${activeTab == 'room-schedule'} ? 'tab--active'"
+               th:href="@{/rooms}">Room schedule</a>
+            <a class="tab" th:classappend="${activeTab == 'workloads'} ? 'tab--active'"
+               th:href="@{/workloads}">Workloads</a>
             <span class="tab tab--soon" title="Not built yet">Disruption</span>
             <span class="tab tab--soon" title="Not built yet">Reports</span>
         </div>

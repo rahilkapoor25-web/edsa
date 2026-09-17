@@ -5,63 +5,156 @@
 
 <main th:fragment="main">
 
-    <section class="hero">
+    <section class="hero hero--short">
         <div class="shell">
             <p class="hero__eyebrow">Examination office</p>
-            <h1 class="hero__title">Four spreadsheets in, one seating plan and duty roster out.</h1>
+            <h1 class="hero__title">Load the four files, then compute the plan.</h1>
             <p class="hero__lead">
-                EDSA reads students, rooms, faculty and the timetable, seats every candidate on the
-                room grid and puts an invigilator in every room — checking each choice against the
-                examination office's rules as it goes.
+                Every seat and every duty is checked against the hard rules as it is chosen, so
+                what comes back is either a legal plan or a clear reason why there isn't one.
             </p>
-            <div class="hero__actions">
-                <a class="button" href="#timetable">View the timetable</a>
-            </div>
         </div>
     </section>
 
     <div class="page shell">
 
-        <section class="stats">
+        <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
+
+        <section class="stats" th:if="${hasData}">
             <article class="card">
-                <span class="label">Candidates</span>
+                <span class="label">Students</span>
                 <span class="stat__value" th:text="${studentCount}">60</span>
-                <p class="stat__note">
-                    across <span th:text="${departmentCount}">3</span> departments
-                </p>
+                <p class="stat__note">rows read</p>
             </article>
             <article class="card">
                 <span class="label">Rooms</span>
                 <span class="stat__value" th:text="${roomCount}">4</span>
-                <p class="stat__note">
-                    <span class="mono" th:text="${totalSeats}">163</span> seats in total
-                </p>
+                <p class="stat__note">rows read</p>
             </article>
             <article class="card">
-                <span class="label">Invigilators</span>
+                <span class="label">Faculty</span>
                 <span class="stat__value" th:text="${facultyCount}">8</span>
-                <p class="stat__note">
-                    <span class="mono" th:text="${seniorCount}">4</span> senior
-                </p>
+                <p class="stat__note">rows read</p>
             </article>
             <article class="card">
                 <span class="label">Exam slots</span>
                 <span class="stat__value" th:text="${slotCount}">6</span>
-                <p class="stat__note">
-                    over <span th:text="${examDays}">3</span> days
-                </p>
+                <p class="stat__note">rows read</p>
             </article>
         </section>
 
-        <div class="columns">
+        <div class="columns columns--even">
 
-            <section class="panel" id="timetable">
+            <section class="panel">
                 <div class="panel__head">
-                    <h2 class="panel__title">Timetable</h2>
-                    <span class="label">Loaded from sample files</span>
+                    <h2 class="panel__title">1 · Data</h2>
+                    <span class="label" th:text="${hasData} ? 'Loaded' : 'Nothing loaded'">Nothing loaded</span>
                 </div>
-                <div class="table-wrap">
-                    <table class="table">
+                <div class="panel__body">
+                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data">
+                        <div class="field">
+                            <label class="label" for="students">Students CSV</label>
+                            <input class="input input--file" type="file" id="students" name="students" accept=".csv">
+                        </div>
+                        <div class="field">
+                            <label class="label" for="rooms">Rooms CSV</label>
+                            <input class="input input--file" type="file" id="rooms" name="rooms" accept=".csv">
+                        </div>
+                        <div class="field">
+                            <label class="label" for="faculty">Faculty CSV</label>
+                            <input class="input input--file" type="file" id="faculty" name="faculty" accept=".csv">
+                        </div>
+                        <div class="field">
+                            <label class="label" for="timetable">Timetable CSV</label>
+                            <input class="input input--file" type="file" id="timetable" name="timetable" accept=".csv">
+                        </div>
+                        <button class="button button--full" type="submit">Upload the four files</button>
+                    </form>
+
+                    <p class="or">or</p>
+
+                    <form method="post" th:action="@{/data/sample}">
+                        <button class="button button--quiet button--full" type="submit">
+                            Load the bundled sample data
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">2 · Compute</h2>
+                    <span class="label" th:text="${hasPlan} ? 'Plan ready' : 'Not computed'">Not computed</span>
+                </div>
+                <div class="panel__body">
+
+                    <p class="muted" th:unless="${hasData}">
+                        Load the four files first. The allocator needs students, rooms, faculty and a
+                        timetable before it can seat anybody.
+                    </p>
+
+                    <form method="post" th:action="@{/compute}" th:if="${hasData}">
+                        <button class="button button--full" type="submit"
+                                th:text="${hasPlan} ? 'Compute again' : 'Compute the plan'">Compute the plan</button>
+                    </form>
+
+                    <div th:if="${hasPlan}">
+                        <dl class="figures">
+                            <div class="figure">
+                                <dt class="label">Seated</dt>
+                                <dd class="figure__value mono" th:text="${seated}">128</dd>
+                            </div>
+                            <div class="figure">
+                                <dt class="label">Duties</dt>
+                                <dd class="figure__value mono" th:text="${dutyCount}">6</dd>
+                            </div>
+                            <div class="figure">
+                                <dt class="label">Score</dt>
+                                <dd class="figure__value mono" th:text="${score}">0</dd>
+                            </div>
+                        </dl>
+
+                        <table class="table table--flush">
+                            <thead>
+                            <tr>
+                                <th>Rule</th>
+                                <th>Kind</th>
+                                <th>Result</th>
+                                <th class="is-numeric">Breaches</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="check : ${checks}">
+                                <td class="is-primary" th:text="${check.constraintName()}">Room capacity</td>
+                                <td th:text="${check.hard()} ? 'Hard' : 'Soft'">Hard</td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${check.satisfied()} ? 'badge--pass' : 'badge--fail'"
+                                          th:text="${check.satisfied()} ? 'Pass' : 'Fail'">Pass</span>
+                                </td>
+                                <td class="is-numeric" th:text="${check.breaches()}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="actions">
+                            <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
+                            <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
+                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">Download CSV</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <section class="panel" th:if="${hasData}">
+            <div class="panel__head">
+                <h2 class="panel__title">Timetable</h2>
+                <span class="label">As loaded</span>
+            </div>
+            <div class="table-wrap">
+                <table class="table">
                     <thead>
                     <tr>
                         <th>Slot</th>
@@ -69,7 +162,6 @@
                         <th>Title</th>
                         <th>Date</th>
                         <th>Time</th>
-                        <th class="is-numeric">Sitting</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -79,37 +171,12 @@
                         <td class="is-primary" th:text="${slot.paperName}">Data Structures</td>
                         <td class="mono" th:text="${slot.date}">2026-11-10</td>
                         <td class="mono" th:text="${slot.startTime} + '-' + ${slot.endTime}">09:30-12:30</td>
-                        <td class="is-numeric" th:text="${candidates.get(slot.id)}">24</td>
                     </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-            <section class="panel">
-                <div class="panel__head">
-                    <h2 class="panel__title">Rooms</h2>
-                    <span class="label">Grid</span>
-                </div>
-                <div class="panel__body">
-                    <div class="rooms">
-                        <article class="room" th:each="room : ${rooms}">
-                            <div>
-                                <div class="room__name" th:text="${room.name}">Seminar Hall</div>
-                                <p class="room__where">
-                                    <span class="mono" th:text="${room.id}">R201</span>
-                                    · <span th:text="${room.building}">Block B</span>
-                                    · <span class="mono"
-                                            th:text="${room.rowCount} + '×' + ${room.columnCount}">10×6</span>
-                                </p>
-                            </div>
-                            <span class="room__seats" th:text="${room.capacity()}">60</span>
-                        </article>
-                    </div>
-                </div>
-            </section>
-
-        </div>
     </div>
 
 </main>

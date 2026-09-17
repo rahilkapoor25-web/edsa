@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Workloads', 'workloads', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Duty roster</p>
+                <h1 class="page__title">Workloads</h1>
+            </div>
+            <p class="page__aside" th:if="${hasPlan}">
+                <span class="mono" th:text="${dutyCount}">6</span> duties in all
+            </p>
+        </div>
+
+        <section class="card empty" th:unless="${hasPlan}">
+            <h2 class="empty__title">No plan yet</h2>
+            <p class="empty__note">Load the data and compute a plan, and the duties will appear here.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <section class="panel" th:if="${hasPlan}">
+            <div class="panel__head">
+                <h2 class="panel__title">Duties per invigilator</h2>
+                <span class="label">Busiest first</span>
+            </div>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Invigilator</th>
+                        <th>Id</th>
+                        <th>Department</th>
+                        <th>Seniority</th>
+                        <th class="is-numeric">Duties</th>
+                        <th>Slots</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="workload : ${workloads}">
+                        <td class="is-primary" th:text="${workload.member().getName()}">Dr. Meera Nair</td>
+                        <td><span class="code" th:text="${workload.member().getId()}">F01</span></td>
+                        <td th:text="${workload.member().getDepartment()}">CSE</td>
+                        <td th:text="${workload.member().isSenior()} ? 'Senior' : 'Junior'">Senior</td>
+                        <td class="is-numeric" th:text="${workload.duties()}">1</td>
+                        <td>
+                            <span class="muted" th:if="${#lists.isEmpty(workload.slots())}">none</span>
+                            <span class="code" th:each="slot : ${workload.slots()}" th:text="${slot.id}">E1</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+</body>
+</html>

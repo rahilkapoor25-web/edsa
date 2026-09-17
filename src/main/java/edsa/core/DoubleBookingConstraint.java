@@ -1,6 +1,5 @@
 package edsa.core;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,13 +15,14 @@ public final class DoubleBookingConstraint implements HardConstraint {
         return "Double booking";
     }
 
+    /** One breach per person or room caught in two places at once. */
     @Override
-    public boolean isSatisfied(ExamPlan plan) {
+    public int breaches(ExamPlan plan) {
         List<ExamSlot> slots = plan.data().slots();
+        int clashes = 0;
+
         for (ExamSlot slot : slots) {
-            if (hasRepeat(invigilators(plan, slot)) || hasRepeat(seatedStudents(plan, slot))) {
-                return false;
-            }
+            clashes += repeats(invigilators(plan, slot)) + repeats(seatedStudents(plan, slot));
         }
         for (int i = 0; i < slots.size(); i++) {
             for (int j = i + 1; j < slots.size(); j++) {
@@ -31,14 +31,12 @@ public final class DoubleBookingConstraint implements HardConstraint {
                 if (!one.overlaps(other)) {
                     continue;
                 }
-                if (share(invigilators(plan, one), invigilators(plan, other))
-                        || share(seatedStudents(plan, one), seatedStudents(plan, other))
-                        || share(rooms(plan, one), rooms(plan, other))) {
-                    return false;
-                }
+                clashes += shared(invigilators(plan, one), invigilators(plan, other))
+                        + shared(seatedStudents(plan, one), seatedStudents(plan, other))
+                        + shared(rooms(plan, one), rooms(plan, other));
             }
         }
-        return true;
+        return clashes;
     }
 
     private static List<String> invigilators(ExamPlan plan, ExamSlot slot) {
@@ -53,12 +51,13 @@ public final class DoubleBookingConstraint implements HardConstraint {
         return plan.seating().seatsFor(slot.getId()).stream().map(Seat::roomId).distinct().toList();
     }
 
-    private static boolean hasRepeat(List<String> ids) {
-        return new HashSet<>(ids).size() != ids.size();
+    private static int repeats(List<String> ids) {
+        return ids.size() - new HashSet<>(ids).size();
     }
 
-    private static boolean share(List<String> ids, List<String> others) {
-        Set<String> seen = new HashSet<>(ids);
-        return !Collections.disjoint(seen, others);
+    private static int shared(List<String> ids, List<String> others) {
+        Set<String> overlap = new HashSet<>(ids);
+        overlap.retainAll(new HashSet<>(others));
+        return overlap.size();
     }
 }

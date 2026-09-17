@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Room schedule', 'room-schedule', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Seating plan</p>
+                <h1 class="page__title">Room schedule</h1>
+            </div>
+            <a class="button" th:if="${hasPlan}" th:href="@{/seating-plan.csv}">Download CSV</a>
+        </div>
+
+        <section class="card empty" th:unless="${hasPlan}">
+            <h2 class="empty__title">No plan yet</h2>
+            <p class="empty__note">Load the data and compute a plan, and the seating will appear here.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <div th:if="${hasPlan}">
+            <form class="filter" method="get" th:action="@{/rooms}">
+                <label class="label" for="room">Room</label>
+                <select class="input select" id="room" name="room">
+                    <option value="" th:selected="${room == null or room.isEmpty()}">All rooms</option>
+                    <option th:each="option : ${rooms}"
+                            th:value="${option.id}"
+                            th:selected="${option.id == room}"
+                            th:text="${option.name} + ' (' + ${option.id} + ')'">Seminar Hall (R201)</option>
+                </select>
+                <button class="button button--quiet" type="submit">Filter</button>
+            </form>
+
+            <p class="muted" th:if="${#lists.isEmpty(sittings)}">
+                Nothing is seated in that room.
+            </p>
+
+            <section class="panel" th:each="sitting : ${sittings}">
+                <div class="panel__head">
+                    <div>
+                        <h2 class="panel__title">
+                            <span th:text="${sitting.room().getName()}">Seminar Hall</span>
+                            <span class="code" th:text="${sitting.room().getId()}">R201</span>
+                        </h2>
+                        <p class="panel__note">
+                            <span class="code" th:text="${sitting.slot().getId()}">E1</span>
+                            <span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span>
+                            <span th:text="${sitting.slot().getPaperName()}">Data Structures</span>
+                            · <span class="mono" th:text="${sitting.slot().getDate()}">2026-11-10</span>
+                            <span class="mono"
+                                  th:text="${sitting.slot().getStartTime()} + '-' + ${sitting.slot().getEndTime()}">09:30-12:30</span>
+                        </p>
+                    </div>
+                    <div class="panel__aside">
+                        <span class="label">Invigilator</span>
+                        <p class="panel__note" th:if="${#lists.isEmpty(sitting.invigilators())}">none</p>
+                        <p class="panel__note" th:each="member : ${sitting.invigilators()}">
+                            <span th:text="${member.name}">Dr. Meera Nair</span>
+                            <span class="code" th:text="${member.id}">F01</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th class="is-numeric">Row</th>
+                            <th class="is-numeric">Seat</th>
+                            <th>Student</th>
+                            <th>Name</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="placed : ${sitting.students()}">
+                            <td class="is-numeric" th:text="${placed.row()}">1</td>
+                            <td class="is-numeric" th:text="${placed.column()}">1</td>
+                            <td><span class="code" th:text="${placed.student().getId()}">S001</span></td>
+                            <td class="is-primary" th:text="${placed.student().getName()}">Aarav Sharma</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

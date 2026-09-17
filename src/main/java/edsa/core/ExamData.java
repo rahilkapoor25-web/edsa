@@ -16,6 +16,7 @@ public final class ExamData {
     private final Map<String, Student> studentsById;
     private final Map<String, Room> roomsById;
     private final Map<String, Faculty> facultyById;
+    private final Map<String, ExamSlot> slotsById;
 
     public ExamData(List<Student> students, List<Room> rooms, List<Faculty> faculty, List<ExamSlot> slots) {
         this.students = List.copyOf(students);
@@ -25,6 +26,7 @@ public final class ExamData {
         this.studentsById = index(this.students, Student::getId);
         this.roomsById = index(this.rooms, Room::getId);
         this.facultyById = index(this.faculty, Faculty::getId);
+        this.slotsById = index(this.slots, ExamSlot::getId);
     }
 
     private static <T> Map<String, T> index(List<T> values, Function<T, String> idOf) {
@@ -55,6 +57,10 @@ public final class ExamData {
 
     public Room room(String id) {
         return roomsById.get(id);
+    }
+
+    public ExamSlot slot(String id) {
+        return slotsById.get(id);
     }
 
     public Faculty facultyMember(String id) {

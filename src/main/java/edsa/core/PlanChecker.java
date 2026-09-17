@@ -22,13 +22,23 @@ public final class PlanChecker {
         return constraints;
     }
 
-    public List<Violation> check(ExamPlan plan) {
+    /** Every rule and how the plan fared against it, in registration order. */
+    public List<CheckResult> inspect(ExamPlan plan) {
         return constraints.stream()
-                .filter(constraint -> !constraint.isSatisfied(plan))
-                .map(constraint -> new Violation(
+                .map(constraint -> new CheckResult(
                         constraint.name(),
                         constraint instanceof HardConstraint,
+                        constraint.isSatisfied(plan),
+                        constraint.breaches(plan),
                         constraint.penalty(plan)))
+                .toList();
+    }
+
+    /** Only the rules the plan breaks. */
+    public List<Violation> check(ExamPlan plan) {
+        return inspect(plan).stream()
+                .filter(result -> !result.satisfied())
+                .map(result -> new Violation(result.constraintName(), result.hard(), result.penalty()))
                 .toList();
     }
 
