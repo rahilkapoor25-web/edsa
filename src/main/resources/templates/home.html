@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Overview', 'overview', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+
+    <section class="hero">
+        <div class="shell">
+            <p class="hero__eyebrow">Examination office</p>
+            <h1 class="hero__title">Four spreadsheets in, one seating plan and duty roster out.</h1>
+            <p class="hero__lead">
+                EDSA reads students, rooms, faculty and the timetable, seats every candidate on the
+                room grid and puts an invigilator in every room — checking each choice against the
+                examination office's rules as it goes.
+            </p>
+            <div class="hero__actions">
+                <a class="button" href="#timetable">View the timetable</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="page shell">
+
+        <section class="stats">
+            <article class="card">
+                <span class="label">Candidates</span>
+                <span class="stat__value" th:text="${studentCount}">60</span>
+                <p class="stat__note">
+                    across <span th:text="${departmentCount}">3</span> departments
+                </p>
+            </article>
+            <article class="card">
+                <span class="label">Rooms</span>
+                <span class="stat__value" th:text="${roomCount}">4</span>
+                <p class="stat__note">
+                    <span class="mono" th:text="${totalSeats}">163</span> seats in total
+                </p>
+            </article>
+            <article class="card">
+                <span class="label">Invigilators</span>
+                <span class="stat__value" th:text="${facultyCount}">8</span>
+                <p class="stat__note">
+                    <span class="mono" th:text="${seniorCount}">4</span> senior
+                </p>
+            </article>
+            <article class="card">
+                <span class="label">Exam slots</span>
+                <span class="stat__value" th:text="${slotCount}">6</span>
+                <p class="stat__note">
+                    over <span th:text="${examDays}">3</span> days
+                </p>
+            </article>
+        </section>
+
+        <div class="columns">
+
+            <section class="panel" id="timetable">
+                <div class="panel__head">
+                    <h2 class="panel__title">Timetable</h2>
+                    <span class="label">Loaded from sample files</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Slot</th>
+                        <th>Paper</th>
+                        <th>Title</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th class="is-numeric">Sitting</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="slot : ${slots}">
+                        <td><span class="code" th:text="${slot.id}">E1</span></td>
+                        <td><span class="code" th:text="${slot.paperCode}">CS301</span></td>
+                        <td class="is-primary" th:text="${slot.paperName}">Data Structures</td>
+                        <td class="mono" th:text="${slot.date}">2026-11-10</td>
+                        <td class="mono" th:text="${slot.startTime} + '-' + ${slot.endTime}">09:30-12:30</td>
+                        <td class="is-numeric" th:text="${candidates.get(slot.id)}">24</td>
+                    </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Rooms</h2>
+                    <span class="label">Grid</span>
+                </div>
+                <div class="panel__body">
+                    <div class="rooms">
+                        <article class="room" th:each="room : ${rooms}">
+                            <div>
+                                <div class="room__name" th:text="${room.name}">Seminar Hall</div>
+                                <p class="room__where">
+                                    <span class="mono" th:text="${room.id}">R201</span>
+                                    · <span th:text="${room.building}">Block B</span>
+                                    · <span class="mono"
+                                            th:text="${room.rowCount} + '×' + ${room.columnCount}">10×6</span>
+                                </p>
+                            </div>
+                            <span class="room__seats" th:text="${room.capacity()}">60</span>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+</main>
+
+</body>
+</html>

@@ -8,6 +8,7 @@ import edsa.core.Student;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,7 +25,8 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Loads the four input files.
+ * Loads the four input files, either from disk or from any reader, which is what an uploaded
+ * file arrives as.
  *
  * <p>Plain comma-separated values: no quoted fields, no embedded commas. Every row is
  * checked, and a row that cannot be understood is reported with its file name and line
@@ -35,15 +37,47 @@ public final class CsvReader {
     private static final String CODE_SEPARATOR = ";";
 
     public List<Student> readStudents(Path file) {
-        return read(file, 4, Student::getId, fields -> new Student(
+        return read(file, students());
+    }
+
+    public List<Student> readStudents(Reader source, String fileName) {
+        return read(source, fileName, students());
+    }
+
+    public List<Room> readRooms(Path file) {
+        return read(file, rooms());
+    }
+
+    public List<Room> readRooms(Reader source, String fileName) {
+        return read(source, fileName, rooms());
+    }
+
+    public List<Faculty> readFaculty(Path file) {
+        return read(file, faculty());
+    }
+
+    public List<Faculty> readFaculty(Reader source, String fileName) {
+        return read(source, fileName, faculty());
+    }
+
+    public List<ExamSlot> readSlots(Path file) {
+        return read(file, slots());
+    }
+
+    public List<ExamSlot> readSlots(Reader source, String fileName) {
+        return read(source, fileName, slots());
+    }
+
+    private static Format<Student> students() {
+        return new Format<>(4, Student::getId, fields -> new Student(
                 requireText(fields[0], "student_id"),
                 requireText(fields[1], "name"),
                 requireText(fields[2], "department"),
                 requireCodes(fields[3], "papers")));
     }
 
-    public List<Room> readRooms(Path file) {
-        return read(file, 5, Room::getId, fields -> new Room(
+    private static Format<Room> rooms() {
+        return new Format<>(5, Room::getId, fields -> new Room(
                 requireText(fields[0], "room_id"),
                 requireText(fields[1], "name"),
                 requirePositiveInt(fields[2], "rows"),
@@ -51,8 +85,8 @@ public final class CsvReader {
                 requireText(fields[4], "building")));
     }
 
-    public List<Faculty> readFaculty(Path file) {
-        return read(file, 5, Faculty::getId, fields -> new Faculty(
+    private static Format<Faculty> faculty() {
+        return new Format<>(5, Faculty::getId, fields -> new Faculty(
                 requireText(fields[0], "faculty_id"),
                 requireText(fields[1], "name"),
                 requireText(fields[2], "department"),
@@ -60,8 +94,8 @@ public final class CsvReader {
                 optionalCodes(fields[4])));
     }
 
-    public List<ExamSlot> readSlots(Path file) {
-        return read(file, 6, ExamSlot::getId, fields -> {
+    private static Format<ExamSlot> slots() {
+        return new Format<>(6, ExamSlot::getId, fields -> {
             LocalTime start = requireTime(fields[4], "start_time");
             LocalTime end = requireTime(fields[5], "end_time");
             if (!end.isAfter(start)) {
@@ -77,17 +111,31 @@ public final class CsvReader {
         });
     }
 
+    /** How one file is laid out: its column count, where the id lives, and how a row is built. */
+    private record Format<T>(int columns, Function<T, String> idOf, RowParser<T> parser) {
+    }
+
     @FunctionalInterface
     private interface RowParser<T> {
         T parse(String[] fields);
     }
 
-    private <T> List<T> read(Path file, int expectedColumns, Function<T, String> idOf, RowParser<T> parser) {
-        String fileName = file.getFileName().toString();
+    private <T> List<T> read(Path file, Format<T> format) {
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            return read(reader, file.getFileName().toString(), format);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read " + file, e);
+        }
+    }
+
+    private <T> List<T> read(Reader source, String fileName, Format<T> format) {
+        BufferedReader reader = source instanceof BufferedReader buffered
+                ? buffered
+                : new BufferedReader(source);
         List<T> rows = new ArrayList<>();
         Set<String> seenIds = new HashSet<>();
 
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        try {
             if (reader.readLine() == null) {
                 throw new InvalidInputException(fileName, 1, "file is empty");
             }
@@ -99,23 +147,24 @@ public final class CsvReader {
                     continue;
                 }
                 String[] fields = Arrays.stream(line.split(",", -1)).map(String::trim).toArray(String[]::new);
-                if (fields.length != expectedColumns) {
+                if (fields.length != format.columns()) {
                     throw new InvalidInputException(fileName, lineNumber,
-                            "expected " + expectedColumns + " columns, found " + fields.length);
+                            "expected " + format.columns() + " columns, found " + fields.length);
                 }
                 T row;
                 try {
-                    row = parser.parse(fields);
+                    row = format.parser().parse(fields);
                 } catch (IllegalArgumentException | DateTimeParseException e) {
                     throw new InvalidInputException(fileName, lineNumber, e.getMessage());
                 }
-                if (!seenIds.add(idOf.apply(row))) {
-                    throw new InvalidInputException(fileName, lineNumber, "duplicate id " + idOf.apply(row));
+                if (!seenIds.add(format.idOf().apply(row))) {
+                    throw new InvalidInputException(fileName, lineNumber,
+                            "duplicate id " + format.idOf().apply(row));
                 }
                 rows.add(row);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot read " + file, e);
+            throw new UncheckedIOException("cannot read " + fileName, e);
         }
         return rows;
     }

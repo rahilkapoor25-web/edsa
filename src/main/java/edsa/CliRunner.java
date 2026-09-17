@@ -11,9 +11,8 @@ import edsa.core.Room;
 import edsa.core.Seat;
 import edsa.core.Violation;
 import edsa.data.CsvReader;
+import edsa.data.SampleData;
 
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,33 +39,20 @@ public final class CliRunner {
             System.exit(1);
         }
 
-        CsvReader reader = new CsvReader();
-        Path students = args.length == 4 ? Path.of(args[0]) : sample("students.csv");
-        Path rooms = args.length == 4 ? Path.of(args[1]) : sample("rooms.csv");
-        Path faculty = args.length == 4 ? Path.of(args[2]) : sample("faculty.csv");
-        Path timetable = args.length == 4 ? Path.of(args[3]) : sample("timetable.csv");
-
-        ExamData data = new ExamData(
-                reader.readStudents(students),
-                reader.readRooms(rooms),
-                reader.readFaculty(faculty),
-                reader.readSlots(timetable));
+        ExamData data = args.length == 4 ? readFiles(args) : SampleData.load();
 
         PlanChecker checker = PlanChecker.standard();
         ExamPlan plan = new GreedyAllocator(checker).allocate(data);
         print(plan, checker);
     }
 
-    private static Path sample(String name) {
-        URL resource = CliRunner.class.getResource("/sample/" + name);
-        if (resource == null) {
-            throw new IllegalStateException("sample file is missing from the classpath: " + name);
-        }
-        try {
-            return Path.of(resource.toURI());
-        } catch (URISyntaxException e) {
-            throw new IllegalStateException("cannot read sample file " + name, e);
-        }
+    private static ExamData readFiles(String[] args) {
+        CsvReader reader = new CsvReader();
+        return new ExamData(
+                reader.readStudents(Path.of(args[0])),
+                reader.readRooms(Path.of(args[1])),
+                reader.readFaculty(Path.of(args[2])),
+                reader.readSlots(Path.of(args[3])));
     }
 
     private static void print(ExamPlan plan, PlanChecker checker) {

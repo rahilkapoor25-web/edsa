@@ -104,6 +104,18 @@ Controllers and Thymeleaf templates for Import, Solve, Plan viewer, Disruption a
 The Solve page starts the job on a background thread and polls for progress, so the browser
 never sits waiting for the solver.
 
+Every page goes through one layout, `templates/layout.html`, which owns the header and tab
+bar. A page supplies its content as a fragment:
+
+```html
+<html th:replace="~{layout :: page('Overview', 'overview', ~{:: main})}">
+```
+
+Styling is one stylesheet, `static/css/edsa.css`, with the colours, fonts and spacing as
+custom properties at the top — change them there, not in the rules below. Inter for text,
+JetBrains Mono for ids and counts (`.mono`, `.code`, `.is-numeric`), one green accent, white
+cards with thin borders on a light canvas. No JavaScript framework, and no CSS build step.
+
 ## Rules and scoring
 
 **Hard constraints** decide whether a plan is allowed at all — anything that breaks one is
