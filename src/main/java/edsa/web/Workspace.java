@@ -1,38 +1,51 @@
 package edsa.web;
 
 import edsa.core.ExamData;
-import edsa.core.ExamPlan;
+import edsa.core.ExamMode;
+import edsa.core.ExamPlanner;
+import edsa.core.PlanningResult;
+import edsa.core.SchedulingConfig;
 
 import org.springframework.stereotype.Component;
 
 /**
- * The data the coordinator loaded and the plan computed from it.
+ * The data the coordinator loaded, the mode they chose, and the plan computed from the two.
  *
- * <p>One workspace for the whole application, as one examination office works on one plan at a
- * time. Nothing is written to the database yet, so a restart loses it. Loading data drops any
- * plan built from the data before it, because that plan no longer describes what is loaded.
+ * <p>One workspace for the whole application, as one examination office plans one session at a
+ * time. Changing the mode or the data drops the plan built from the previous pair, so a stale
+ * timetable is never left on screen: the next page load recomputes it.
  */
 @Component
 public class Workspace {
 
+    private final ExamPlanner planner;
+
     private ExamData data;
-    private ExamPlan plan;
+    private ExamMode mode = ExamMode.ENDSEM;
+    private PlanningResult result;
+
+    public Workspace(ExamPlanner planner) {
+        this.planner = planner;
+    }
 
     public synchronized void setData(ExamData data) {
         this.data = data;
-        this.plan = null;
+        this.result = null;
     }
 
-    public synchronized void setPlan(ExamPlan plan) {
-        this.plan = plan;
+    public synchronized void setMode(ExamMode mode) {
+        if (this.mode != mode) {
+            this.mode = mode;
+            this.result = null;
+        }
+    }
+
+    public synchronized ExamMode mode() {
+        return mode;
     }
 
     public synchronized ExamData data() {
         return data;
-    }
-
-    public synchronized ExamPlan plan() {
-        return plan;
     }
 
     public synchronized boolean hasData() {
@@ -40,6 +53,20 @@ public class Workspace {
     }
 
     public synchronized boolean hasPlan() {
-        return plan != null;
+        return result != null;
+    }
+
+    public synchronized SchedulingConfig config() {
+        return planner.config();
+    }
+
+    /** Plans the loaded data under the current mode, replacing any earlier plan. */
+    public synchronized PlanningResult compute() {
+        result = planner.plan(data, mode);
+        return result;
+    }
+
+    public synchronized PlanningResult result() {
+        return result;
     }
 }

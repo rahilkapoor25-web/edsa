@@ -1,32 +1,28 @@
 package edsa;
 
-import edsa.core.Assignment;
 import edsa.core.ExamData;
+import edsa.core.ExamMode;
 import edsa.core.ExamPlan;
-import edsa.core.ExamSlot;
+import edsa.core.ExamPlanner;
 import edsa.core.Faculty;
-import edsa.core.GreedyAllocator;
-import edsa.core.PlanChecker;
-import edsa.core.Room;
-import edsa.core.Seat;
-import edsa.core.Violation;
+import edsa.core.PlacedStudent;
+import edsa.core.PlanningResult;
+import edsa.core.RoomSitting;
 import edsa.data.CsvReader;
 import edsa.data.SampleData;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 /**
  * Drives the engine from the command line, without the web layer.
  *
- * <p>With no arguments it runs on the bundled sample files; otherwise it takes the four input
- * files in the order students, rooms, faculty, timetable.
+ * <p>With no arguments it plans the bundled sample files; otherwise it takes the four input
+ * files in the order students, rooms, faculty, timetable. An optional last argument picks the
+ * exam mode (QUIZ, MIDSEM or ENDSEM); ENDSEM is the default.
  */
 public final class CliRunner {
 
@@ -34,85 +30,86 @@ public final class CliRunner {
     }
 
     public static void main(String[] args) {
-        if (args.length != 0 && args.length != 4) {
-            System.err.println("usage: CliRunner [students.csv rooms.csv faculty.csv timetable.csv]");
+        List<String> arguments = new ArrayList<>(List.of(args));
+        ExamMode mode = ExamMode.ENDSEM;
+        if (!arguments.isEmpty()) {
+            try {
+                mode = ExamMode.of(arguments.get(arguments.size() - 1));
+                arguments.remove(arguments.size() - 1);
+            } catch (IllegalArgumentException keepDefault) {
+                // the last argument is a file, not a mode
+            }
+        }
+        if (arguments.size() != 0 && arguments.size() != 4) {
+            System.err.println("usage: CliRunner [students.csv rooms.csv faculty.csv timetable.csv] [QUIZ|MIDSEM|ENDSEM]");
             System.exit(1);
         }
 
-        ExamData data = args.length == 4 ? readFiles(args) : SampleData.load();
-
-        PlanChecker checker = PlanChecker.standard();
-        ExamPlan plan = new GreedyAllocator(checker).allocate(data);
-        print(plan, checker);
+        ExamData data = arguments.size() == 4 ? readFiles(arguments) : SampleData.load();
+        PlanningResult result = new ExamPlanner().plan(data, mode);
+        print(result, mode);
+        if (!result.isUsable()) {
+            System.exit(2);
+        }
     }
 
-    private static ExamData readFiles(String[] args) {
+    private static ExamData readFiles(List<String> args) {
         CsvReader reader = new CsvReader();
         return new ExamData(
-                reader.readStudents(Path.of(args[0])),
-                reader.readRooms(Path.of(args[1])),
-                reader.readFaculty(Path.of(args[2])),
-                reader.readSlots(Path.of(args[3])));
+                reader.readStudents(Path.of(args.get(0))),
+                reader.readRooms(Path.of(args.get(1))),
+                reader.readFaculty(Path.of(args.get(2))),
+                reader.readExams(Path.of(args.get(3))));
     }
 
-    private static void print(ExamPlan plan, PlanChecker checker) {
-        ExamData data = plan.data();
-        System.out.println("EDSA - exam seating and invigilation plan");
+    private static void print(PlanningResult result, ExamMode mode) {
+        ExamPlan plan = result.plan();
+        System.out.printf("EDSA - %s timetable (%d minutes per paper)%n", mode.label(), mode.defaultMinutes());
 
-        for (ExamSlot slot : data.slots()) {
+        for (RoomSitting sitting : plan.sittings()) {
             System.out.printf("%n%s  %s %s  %s %s-%s%n",
-                    slot.getId(), slot.getPaperCode(), slot.getPaperName(),
-                    slot.getDate(), slot.getStartTime(), slot.getEndTime());
-
-            Map<String, List<Seat>> seatsByRoom = new LinkedHashMap<>();
-            for (Seat seat : plan.seating().seatsFor(slot.getId())) {
-                seatsByRoom.computeIfAbsent(seat.roomId(), key -> new ArrayList<>()).add(seat);
-            }
-            seatsByRoom.forEach((roomId, seats) -> {
-                Room room = data.room(roomId);
-                System.out.printf("  %s (%s) - %s - %d students%n",
-                        room.getName(), roomId, invigilatorsFor(plan, slot.getId(), roomId), seats.size());
-                printGrid(seats);
-            });
+                    sitting.slot().getId(), sitting.slot().getPaperCode(), sitting.slot().getPaperName(),
+                    sitting.slot().getDate(), sitting.slot().getStartTime(), sitting.slot().getEndTime());
+            System.out.printf("  %s (%s) - %s - %d students%n",
+                    sitting.room().getName(), sitting.room().getId(),
+                    invigilators(sitting), sitting.seated());
+            printGrid(sitting.students());
         }
 
         System.out.printf("%nSummary%n");
-        System.out.printf("  students seated : %d%n", plan.seating().seatedCount());
-        System.out.printf("  duties assigned : %d%n", plan.duties().all().size());
-        System.out.printf("  score           : %d%n", checker.score(plan));
+        System.out.printf("  papers scheduled : %d%n", plan.schedule().size());
+        System.out.printf("  students seated  : %d%n", plan.seating().seatedCount());
+        System.out.printf("  duties assigned  : %d%n", plan.duties().all().size());
 
-        List<Violation> violations = checker.check(plan);
-        if (violations.isEmpty()) {
-            System.out.println("  violations      : none");
+        List<String> problems = result.problems();
+        if (problems.isEmpty()) {
+            System.out.println("  problems         : none");
         } else {
-            System.out.println("  violations      :");
-            violations.forEach(violation -> System.out.println("    " + violation));
+            System.out.println("  problems         :");
+            problems.forEach(problem -> System.out.println("    - " + problem));
         }
 
         System.out.println("  duties per invigilator:");
         dutyCounts(plan).forEach((facultyId, count) -> {
-            Faculty member = data.facultyMember(facultyId);
+            Faculty member = plan.data().facultyMember(facultyId);
             System.out.printf("    %-4s %-22s %d%n", facultyId, member.getName(), count);
         });
     }
 
-    private static String invigilatorsFor(ExamPlan plan, String slotId, String roomId) {
-        Set<String> names = new LinkedHashSet<>();
-        for (Assignment duty : plan.duties().forSlot(slotId)) {
-            if (duty.roomId().equals(roomId)) {
-                Faculty member = plan.data().facultyMember(duty.facultyId());
-                names.add(member.getName() + " (" + member.getId() + ")");
-            }
+    private static String invigilators(RoomSitting sitting) {
+        if (sitting.invigilators().isEmpty()) {
+            return "no invigilator";
         }
-        return names.isEmpty() ? "no invigilator" : String.join(", ", names);
+        return String.join(", ", sitting.invigilators().stream()
+                .map(member -> member.getName() + " (" + member.getId() + ")").toList());
     }
 
-    private static void printGrid(List<Seat> seats) {
-        Map<Integer, List<Seat>> byRow = new TreeMap<>();
-        seats.forEach(seat -> byRow.computeIfAbsent(seat.row(), key -> new ArrayList<>()).add(seat));
-        byRow.forEach((row, rowSeats) -> {
+    private static void printGrid(List<PlacedStudent> students) {
+        Map<Integer, List<PlacedStudent>> byRow = new TreeMap<>();
+        students.forEach(placed -> byRow.computeIfAbsent(placed.row(), key -> new ArrayList<>()).add(placed));
+        byRow.forEach((row, rowStudents) -> {
             StringBuilder line = new StringBuilder("    ");
-            rowSeats.forEach(seat -> line.append(seat.studentId()).append(' '));
+            rowStudents.forEach(placed -> line.append(placed.student().getId()).append(' '));
             System.out.println(line.toString().stripTrailing());
         });
     }

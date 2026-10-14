@@ -1,8 +1,9 @@
 package edsa.core;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/** Runs every registered rule over a plan and lists what is broken. */
+/** Runs every registered rule over a finished plan and lists exactly what is broken. */
 public final class PlanChecker {
 
     private final List<Constraint> constraints;
@@ -12,10 +13,17 @@ public final class PlanChecker {
     }
 
     /** The rules in force. Adding a rule is one line here. */
-    public static PlanChecker standard() {
+    public static PlanChecker using(SchedulingConfig config) {
         return new PlanChecker(List.of(
-                new RoomCapacityConstraint(),
-                new DoubleBookingConstraint()));
+                new ExamDurationConstraint(),
+                new RoomCapacityConstraint(config),
+                new RoomOverlapConstraint(),
+                new StudentConflictConstraint(),
+                new FacultyConflictConstraint()));
+    }
+
+    public static PlanChecker standard() {
+        return using(SchedulingConfig.defaults());
     }
 
     public List<Constraint> constraints() {
@@ -24,22 +32,27 @@ public final class PlanChecker {
 
     /** Every rule and how the plan fared against it, in registration order. */
     public List<CheckResult> inspect(ExamPlan plan) {
-        return constraints.stream()
-                .map(constraint -> new CheckResult(
-                        constraint.name(),
-                        constraint instanceof HardConstraint,
-                        constraint.isSatisfied(plan),
-                        constraint.breaches(plan),
-                        constraint.penalty(plan)))
-                .toList();
+        List<CheckResult> results = new ArrayList<>();
+        for (Constraint constraint : constraints) {
+            List<String> breaches = constraint.breaches(plan);
+            results.add(new CheckResult(constraint.name(), constraint instanceof HardConstraint,
+                    breaches.isEmpty(), breaches, constraint.penalty(plan)));
+        }
+        return results;
     }
 
     /** Only the rules the plan breaks. */
     public List<Violation> check(ExamPlan plan) {
         return inspect(plan).stream()
                 .filter(result -> !result.satisfied())
-                .map(result -> new Violation(result.constraintName(), result.hard(), result.penalty()))
+                .map(result -> new Violation(result.constraintName(), result.hard(),
+                        result.penalty(), result.breaches()))
                 .toList();
+    }
+
+    /** Every actionable message from every broken rule, for reporting to the coordinator. */
+    public List<String> problems(ExamPlan plan) {
+        return inspect(plan).stream().flatMap(result -> result.breaches().stream()).toList();
     }
 
     /** True when no hard rule is broken, which is the only thing that makes a plan usable. */

@@ -628,6 +628,92 @@ a.tab:hover {
     padding: 44px 0 64px;
 }
 
+/* ---------- Exam modes, problems, upload ---------- */
+
+.subhead {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.modes__set {
+    margin: 0 0 16px;
+    padding: 0;
+    border: none;
+}
+
+.modes__set .label {
+    margin-bottom: 10px;
+}
+
+.mode {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.mode:hover {
+    background: var(--wash);
+}
+
+.mode--chosen {
+    border-color: var(--green-500);
+    box-shadow: inset 0 0 0 1px var(--green-500);
+}
+
+.mode__name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.mode__minutes {
+    color: var(--ink-500);
+    font-size: 13px;
+}
+
+.mode__current {
+    margin: 0 0 20px;
+}
+
+.problems {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    color: var(--ink-700);
+    font-size: 13.5px;
+}
+
+.problems li {
+    margin-bottom: 6px;
+}
+
+.problems-block {
+    margin-top: 22px;
+}
+
+.session__logout-form {
+    display: inline;
+    margin: 0;
+}
+
+button.session__logout {
+    border: none;
+    border-left: 1px solid var(--line);
+    background: none;
+    color: var(--ink-500);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+button.session__logout:hover {
+    color: var(--ink-900);
+}
+
 /* ---------- Sign in ---------- */
 
 .signin {

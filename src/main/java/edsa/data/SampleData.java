@@ -25,7 +25,7 @@ public final class SampleData {
                     reader.readStudents(students, "students.csv"),
                     reader.readRooms(rooms, "rooms.csv"),
                     reader.readFaculty(faculty, "faculty.csv"),
-                    reader.readSlots(timetable, "timetable.csv"));
+                    reader.readExams(timetable, "timetable.csv"));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read the bundled sample files", e);
         }

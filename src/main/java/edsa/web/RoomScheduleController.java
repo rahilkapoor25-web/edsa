@@ -26,8 +26,9 @@ public class RoomScheduleController {
     @GetMapping("/rooms")
     public String page(@RequestParam(required = false) String room, Model model) {
         model.addAttribute("hasPlan", workspace.hasPlan());
+        model.addAttribute("mode", workspace.mode());
         if (workspace.hasPlan()) {
-            ExamPlan plan = workspace.plan();
+            ExamPlan plan = workspace.result().plan();
             model.addAttribute("rooms", plan.roomsUsed());
             model.addAttribute("room", room);
             model.addAttribute("sittings", room == null || room.isBlank()
@@ -42,7 +43,7 @@ public class RoomScheduleController {
         if (!workspace.hasPlan()) {
             return ResponseEntity.notFound().build();
         }
-        byte[] csv = SeatingPlanCsv.write(workspace.plan()).getBytes(StandardCharsets.UTF_8);
+        byte[] csv = SeatingPlanCsv.write(workspace.result().plan()).getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"seating-plan.csv\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))

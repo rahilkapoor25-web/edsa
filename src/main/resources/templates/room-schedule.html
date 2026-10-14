@@ -10,6 +10,10 @@
             <div>
                 <p class="label">Seating plan</p>
                 <h1 class="page__title">Room schedule</h1>
+                <p class="page__aside" th:if="${hasPlan}">
+                    <span th:text="${mode.label()}">Endsem</span> ·
+                    <span class="mono" th:text="${mode.defaultMinutes()}">180</span> minutes per paper
+                </p>
             </div>
             <a class="button" th:if="${hasPlan}" th:href="@{/seating-plan.csv}">Download CSV</a>
         </div>
@@ -50,7 +54,8 @@
                             <span th:text="${sitting.slot().getPaperName()}">Data Structures</span>
                             · <span class="mono" th:text="${sitting.slot().getDate()}">2026-11-10</span>
                             <span class="mono"
-                                  th:text="${sitting.slot().getStartTime()} + '-' + ${sitting.slot().getEndTime()}">09:30-12:30</span>
+                                  th:text="${sitting.slot().getStartTime()} + '-' + ${sitting.slot().getEndTime()}">09:00-12:00</span>
+                            · <span class="mono" th:text="${sitting.slot().getDurationMinutes()} + ' min'">180 min</span>
                         </p>
                     </div>
                     <div class="panel__aside">

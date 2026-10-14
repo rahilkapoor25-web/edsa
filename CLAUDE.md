@@ -22,8 +22,10 @@ Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 | Java 17 (LTS) | The whole application |
 | Spring Boot + Thymeleaf | HTTP layer and the five pages, server-rendered HTML + minimal CSS |
 | JDBC | All database access, written as plain Java |
-| H2 (now), MySQL (later) | Students, rooms, faculty, timetable, saved plans, duty history |
-| CSV + `BufferedReader` | Loading the four input files |
+| Spring Security | Form login against the account table, CSRF, sessions |
+| H2 (now), MySQL (later) | Accounts, imported students, rooms, faculty, subjects, enrollments, exams |
+| Apache POI | Reading the one uploaded workbook and writing the template |
+| CSV + `BufferedReader` | The legacy four-file upload, still supported |
 | Threads + `synchronized` | Running the solver off the request thread, background rule checking |
 | Maven | Build, dependencies, test execution |
 | JUnit 5 | Unit and integration tests |
@@ -31,9 +33,8 @@ Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 | GitHub Actions | Continuous integration |
 
 **Not used:** no ORM — no Hibernate, no JPA, no `spring-boot-starter-data-jpa`. Database
-access is written directly in JDBC. No security framework either; the prototype runs on the
-college network, recorded as a scope limitation in the SRS. See **The sign-in gate is not
-authentication** below.
+access is written directly in JDBC, including the account and import tables. The schema lives
+in `src/main/resources/db/schema.sql` and is applied on start-up.
 
 The database is H2 in-memory today (`src/main/resources/application.properties`) and moves
 to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
@@ -128,24 +129,83 @@ custom properties at the top — change them there, not in the rules below. Inte
 JetBrains Mono for ids and counts (`.mono`, `.code`, `.is-numeric`), one green accent, white
 cards with thin borders on a light canvas. No JavaScript framework, and no CSS build step.
 
-## The sign-in gate is not authentication
+## Authentication
 
-`LoginController` accepts **any** address ending in `@thapar.edu` with **any** non-empty
-password. Nothing is verified: there are no accounts, no password is ever checked, and
-nothing is stored beyond the typed address in the HTTP session. `SignedInFilter` sends
-requests without that session attribute to `/login`, and `/logout` invalidates the session.
+Sign-in is decided by the `app_user` table, never by the shape of the address. An address is
+accepted only when an active account exists for it and the password matches the stored BCrypt
+hash, so `rahilkapoor1be@thapar.edu` gets in when it is registered and `r@thapar.edu` does
+not, while a Gmail address registered by the office does. Spring Security owns the login POST
+(`SecurityConfig`); `LoginController` only renders the form.
 
-This is a placeholder gate so the pages have someone to name and a way out, not a security
-boundary. Anyone who can reach the server can type an address and get in. The missing
-security layer is recorded as a scope limitation in the SRS. Replacing it means replacing
-`LoginController` and `SignedInFilter` with a real mechanism, not extending them — and until
-that happens, do not put anything behind this gate that would matter if it were bypassed.
+- Passwords are hashed with BCrypt in `AccountService` and never stored, logged or echoed.
+- An unknown address, a wrong password and a disabled account all return the same message,
+  so the form cannot be used to discover who has an account.
+- CSRF protection is on for every state-changing request; the session id is regenerated at
+  login (session fixation) and invalidated at logout, with the cookie cleared.
+- Everything is protected except `/login`, `/css/**` and the error page.
+
+**Creating the first account.** There is no default password. Set these in the environment
+before the first start and an administrator is created once, only while the table is empty:
+
+```
+EDSA_SEEDADMIN_ENABLED=true
+EDSA_SEEDADMIN_EMAIL=you@thapar.edu
+EDSA_SEEDADMIN_PASSWORD=<a password you choose, at least 8 characters>
+```
+
+Leave them unset in production and provision accounts through `AccountService.register(...)`
+instead. Never commit a password to `application.properties`.
+
+Authentication is kept clear of allocation: nothing in `edsa.core` knows accounts exist.
+
+## Exam modes
+
+`ExamMode` holds the three kinds and how long one sitting lasts: **Quiz 10 minutes, Midsem 120,
+Endsem 180**. The duration is the only difference between them — one scheduler serves all
+three — and a paper may carry its own validated `Duration Minutes` override.
+
+Changing the mode drops the plan built under the previous one (`Workspace`), so a stale
+timetable is never shown: the next compute re-times every sitting.
+
+## Scheduling
+
+`ExamPlanner` runs three steps and is the single entry point the web layer uses:
+
+1. `TimetableScheduler` turns each declared `Exam` into an `ExamSlot` with real times. Papers
+   are placed largest cohort first, at the earliest time that works, so sittings pack rather
+   than leave gaps, and several run in parallel when students, rooms and invigilators allow.
+   It reserves the rooms it checked, so the allocator cannot drift from what was verified.
+2. `GreedyAllocator` seats each cohort across those rooms and gives every used room the
+   least-loaded free invigilator. Conflicts are tracked incrementally, so cost does not grow
+   with the number of rooms.
+3. `PlanChecker` then re-checks the finished plan independently.
+
+**Intervals are start-inclusive and end-exclusive.** A Midsem starting at 09:00 ends at 11:00;
+nothing else may use that student, room or invigilator at 10:00, but a sitting may start at
+11:00.
+
+Anything that cannot be placed is reported with its reason (`PlanningResult.problems()`) and
+the plan is not presented as a timetable — `isUsable()` is what the pages ask.
+
+## Importing data
+
+The primary workflow is one `.xlsx` workbook with six worksheets — Students, Faculty, Rooms,
+Subjects, Enrollments, Exams — read by `ExcelWorkbookReader` (Apache POI). Every value is
+treated as untrusted text: formulas are refused rather than evaluated, and a bad cell is
+reported as `Worksheet 'Rooms', row 3, column 'Capacity': ...`. Parsing finishes before
+anything is written and `WorkbookImportService` writes in one transaction, so a rejected
+workbook leaves the database exactly as it was. `/import-template.xlsx` downloads a filled
+example to start from.
+
+The four-CSV upload and the bundled sample data still work, unchanged.
 
 ## Rules and scoring
 
-**Hard constraints** decide whether a plan is allowed at all — anything that breaks one is
-thrown away immediately: no invigilator on their own subject's paper, no double-booking of a
-person or room, room capacity never exceeded, no two students of the same paper seated
+**Hard constraints** decide whether a plan is allowed at all. Five are implemented, one per
+failure the coordinator must act on, each reporting what broke and where:
+`ExamDurationConstraint`, `RoomCapacityConstraint`, `RoomOverlapConstraint`,
+`StudentConflictConstraint`, `FacultyConflictConstraint`. Still to come from the brief: no
+invigilator on their own subject's paper, and no two students of the same paper seated
 adjacent.
 
 **Soft constraints** are preferences that add penalty points. Adding up those points gives the
@@ -179,20 +239,25 @@ writing more rules.
 ## Build and run
 
 ```
-mvn clean test        compile and run every test, with a JaCoCo coverage report
-                      written to target/site/jacoco/index.html
-mvn spring-boot:run   start the web application on http://localhost:8080
-mvn clean package     build the executable jar into target/
+./mvnw clean test      compile and run every test, with a JaCoCo coverage report
+                       written to target/site/jacoco/index.html
+./mvnw spring-boot:run start the web application on http://localhost:8080
+./mvnw clean package   build the executable jar into target/
 ```
+
+On Windows use `.\mvnw.cmd` in place of `./mvnw`. The wrapper is script-only: it downloads
+Maven itself on first run, so nothing has to be installed first.
 
 Headless engine run:
 
 ```
 java -cp target/classes edsa.CliRunner
-java -cp target/classes edsa.CliRunner students.csv rooms.csv faculty.csv timetable.csv
+java -cp target/classes edsa.CliRunner MIDSEM
+java -cp target/classes edsa.CliRunner students.csv rooms.csv faculty.csv timetable.csv ENDSEM
 ```
 
-With no arguments it runs on the bundled sample files in `src/main/resources/sample`.
+With no arguments it plans the bundled sample files in `src/main/resources/sample`. An
+optional last argument picks the mode; ENDSEM is the default.
 
 That command drives the engine without the web layer. It is how the solver is tested and
 demonstrated while the pages are still being built, and it works only as long as the one-way

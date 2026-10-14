@@ -1,5 +1,12 @@
 package edsa.core;
 
-/** What one rule made of a plan: whether it holds, and how many things break it if not. */
-public record CheckResult(String constraintName, boolean hard, boolean satisfied, int breaches, int penalty) {
+import java.util.List;
+
+/** What one rule made of a plan: whether it holds, and exactly what breaks it if not. */
+public record CheckResult(String constraintName, boolean hard, boolean satisfied,
+                          List<String> breaches, int penalty) {
+
+    public int breachCount() {
+        return breaches.size();
+    }
 }

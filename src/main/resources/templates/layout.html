@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(pageTitle, activeTab, content)">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" th:fragment="page(pageTitle, activeTab, content)">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,13 +21,15 @@
             <span class="brand__name">EDSA</span>
             <span class="brand__expansion">Exam Duty &amp; Seating Allocation</span>
         </a>
-        <div class="session" th:if="${session.userEmail}">
-            <span class="session__user mono" th:text="${session.userEmail}">coordinator@thapar.edu</span>
-            <a class="session__logout" th:href="@{/logout}">Log out</a>
+        <div class="session" sec:authorize="isAuthenticated()">
+            <span class="session__user mono" sec:authentication="name">coordinator@example.edu</span>
+            <form class="session__logout-form" method="post" th:action="@{/logout}">
+                <button class="session__logout" type="submit">Log out</button>
+            </form>
         </div>
     </div>
 
-    <nav class="tabs" aria-label="Sections" th:if="${session.userEmail}">
+    <nav class="tabs" aria-label="Sections" sec:authorize="isAuthenticated()">
         <div class="tabs__inner shell">
             <a class="tab" th:classappend="${activeTab == 'data-and-run'} ? 'tab--active'"
                th:href="@{/}">Data and Run</a>

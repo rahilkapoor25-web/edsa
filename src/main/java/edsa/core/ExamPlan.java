@@ -9,21 +9,45 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-/** A seating plan and duty roster, together with the data they refer to. */
+/**
+ * A computed timetable: which paper runs when, who sits where, and who invigilates — together
+ * with the data and the mode it was computed from.
+ */
 public final class ExamPlan {
 
     private final ExamData data;
+    private final ExamMode mode;
+    private final List<ExamSlot> schedule;
     private final SeatingPlan seating;
     private final DutyRoster duties;
+    private final Map<String, ExamSlot> slotsById;
 
-    public ExamPlan(ExamData data, SeatingPlan seating, DutyRoster duties) {
+    public ExamPlan(ExamData data, ExamMode mode, List<ExamSlot> schedule,
+                    SeatingPlan seating, DutyRoster duties) {
         this.data = data;
+        this.mode = mode;
+        this.schedule = List.copyOf(schedule);
         this.seating = seating;
         this.duties = duties;
+        this.slotsById = new LinkedHashMap<>();
+        this.schedule.forEach(slot -> slotsById.put(slot.getId(), slot));
     }
 
     public ExamData data() {
         return data;
+    }
+
+    public ExamMode mode() {
+        return mode;
+    }
+
+    /** The sittings, in the order the scheduler placed them. */
+    public List<ExamSlot> schedule() {
+        return schedule;
+    }
+
+    public ExamSlot slot(String slotId) {
+        return slotsById.get(slotId);
     }
 
     public SeatingPlan seating() {
@@ -34,7 +58,7 @@ public final class ExamPlan {
         return duties;
     }
 
-    /** The plan read as a list of sittings, in timetable order. */
+    /** The plan read as a list of sittings, in schedule order. */
     public List<RoomSitting> sittings() {
         return sittings(roomId -> true);
     }
@@ -46,7 +70,7 @@ public final class ExamPlan {
 
     private List<RoomSitting> sittings(Predicate<String> wanted) {
         List<RoomSitting> sittings = new ArrayList<>();
-        for (ExamSlot slot : data.slots()) {
+        for (ExamSlot slot : schedule) {
             Map<String, List<PlacedStudent>> byRoom = new LinkedHashMap<>();
             for (Seat seat : seating.seatsFor(slot.getId())) {
                 if (wanted.test(seat.roomId())) {
@@ -68,7 +92,7 @@ public final class ExamPlan {
                 .toList();
     }
 
-    /** The rooms this plan actually uses, in the order the room file lists them. */
+    /** The rooms this plan actually uses, in the order the room data lists them. */
     public List<Room> roomsUsed() {
         Set<String> used = new LinkedHashSet<>();
         seating.slotIds().forEach(slotId -> seating.seatsFor(slotId).forEach(seat -> used.add(seat.roomId())));
@@ -86,7 +110,8 @@ public final class ExamPlan {
 
     private List<ExamSlot> slotsFor(String facultyId) {
         return duties.forFaculty(facultyId).stream()
-                .map(duty -> data.slot(duty.slotId()))
+                .map(duty -> slotsById.get(duty.slotId()))
+                .filter(slot -> slot != null)
                 .sorted(Comparator.comparing(ExamSlot::getDate).thenComparing(ExamSlot::getStartTime))
                 .toList();
     }

@@ -6,27 +6,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/** The four input files, loaded and indexed. */
+/** The input the examination office supplies: who sits what, where, and when it may be sat. */
 public final class ExamData {
 
     private final List<Student> students;
     private final List<Room> rooms;
     private final List<Faculty> faculty;
-    private final List<ExamSlot> slots;
+    private final List<Exam> exams;
     private final Map<String, Student> studentsById;
     private final Map<String, Room> roomsById;
     private final Map<String, Faculty> facultyById;
-    private final Map<String, ExamSlot> slotsById;
+    private final Map<String, Exam> examsById;
 
-    public ExamData(List<Student> students, List<Room> rooms, List<Faculty> faculty, List<ExamSlot> slots) {
+    public ExamData(List<Student> students, List<Room> rooms, List<Faculty> faculty, List<Exam> exams) {
         this.students = List.copyOf(students);
         this.rooms = List.copyOf(rooms);
         this.faculty = List.copyOf(faculty);
-        this.slots = List.copyOf(slots);
+        this.exams = List.copyOf(exams);
         this.studentsById = index(this.students, Student::getId);
         this.roomsById = index(this.rooms, Room::getId);
         this.facultyById = index(this.faculty, Faculty::getId);
-        this.slotsById = index(this.slots, ExamSlot::getId);
+        this.examsById = index(this.exams, Exam::getId);
     }
 
     private static <T> Map<String, T> index(List<T> values, Function<T, String> idOf) {
@@ -47,8 +47,8 @@ public final class ExamData {
         return faculty;
     }
 
-    public List<ExamSlot> slots() {
-        return slots;
+    public List<Exam> exams() {
+        return exams;
     }
 
     public Student student(String id) {
@@ -59,19 +59,28 @@ public final class ExamData {
         return roomsById.get(id);
     }
 
-    public ExamSlot slot(String id) {
-        return slotsById.get(id);
-    }
-
     public Faculty facultyMember(String id) {
         return facultyById.get(id);
     }
 
-    /** Everyone sitting one paper, in id order so the same input always gives the same output. */
-    public List<Student> studentsFor(String paperCode) {
+    public Exam exam(String id) {
+        return examsById.get(id);
+    }
+
+    /** Everyone registered for one paper, in id order so the same input gives the same output. */
+    public List<Student> studentsFor(String subjectCode) {
         return students.stream()
-                .filter(student -> student.isRegisteredFor(paperCode))
+                .filter(student -> student.isRegisteredFor(subjectCode))
                 .sorted(Comparator.comparing(Student::getId))
                 .toList();
+    }
+
+    /** Capacity of a room, falling back to the configured assumption when it has none of its own. */
+    public int capacityOf(String roomId, SchedulingConfig config) {
+        Room room = roomsById.get(roomId);
+        if (room == null) {
+            return 0;
+        }
+        return room.capacity() > 0 ? room.capacity() : config.fallbackRoomCapacity();
     }
 }
