@@ -60,4 +60,9 @@ public class UserRepository {
         jdbc.update("INSERT INTO app_user (email, password_hash, display_name, role, active) VALUES (?, ?, ?, ?, ?)",
                 email.trim().toLowerCase(), passwordHash, displayName, role, active);
     }
+
+    /** Switches an account on or off without deleting it, so its history is kept. */
+    public void setActive(String email, boolean active) {
+        jdbc.update("UPDATE app_user SET active = ? WHERE LOWER(email) = ?", active, email.trim().toLowerCase());
+    }
 }

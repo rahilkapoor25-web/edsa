@@ -73,6 +73,7 @@ public class DataAndRunController {
             model.addAttribute("usable", result.isUsable());
             model.addAttribute("problems", result.problems());
             model.addAttribute("schedule", result.plan().schedule());
+            model.addAttribute("scheduleRows", result.plan().scheduledPapers());
             model.addAttribute("seated", result.plan().seating().seatedCount());
             model.addAttribute("dutyCount", result.plan().duties().all().size());
         }

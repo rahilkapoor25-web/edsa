@@ -21,6 +21,7 @@ public class WorkloadsController {
         if (workspace.hasPlan()) {
             model.addAttribute("workloads", workspace.result().plan().workloads());
             model.addAttribute("dutyCount", workspace.result().plan().duties().all().size());
+            model.addAttribute("schedule", workspace.result().plan().scheduledPapers());
         }
         return "workloads";
     }

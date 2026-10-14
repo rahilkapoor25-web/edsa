@@ -28,6 +28,11 @@ public enum ExamMode {
         return defaultMinutes;
     }
 
+    /** The duration as it reads on screen: "10 min", "2 h", "3 h". */
+    public String durationLabel() {
+        return Durations.label(defaultMinutes);
+    }
+
     public static ExamMode of(String name) {
         for (ExamMode mode : values()) {
             if (mode.name().equalsIgnoreCase(name) || mode.label.equalsIgnoreCase(name)) {

@@ -1,5 +1,6 @@
 package edsa.auth;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -46,6 +47,32 @@ public class AccountService {
 
     public Optional<AppUser> find(String email) {
         return users.findByEmail(email);
+    }
+
+    public List<AppUser> all() {
+        return users.findAll();
+    }
+
+    /**
+     * Switches an account off, or back on.
+     *
+     * @throws IllegalArgumentException when it is the last active administrator, since nobody
+     *                                  would be left who could switch it back
+     */
+    public void setActive(String email, boolean active) {
+        AppUser user = users.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("no account for " + email));
+        if (!active && isLastActiveAdministrator(user)) {
+            throw new IllegalArgumentException("this is the last active administrator");
+        }
+        users.setActive(user.email(), active);
+    }
+
+    private boolean isLastActiveAdministrator(AppUser user) {
+        return user.active() && "ADMIN".equals(user.role())
+                && users.findAll().stream()
+                .filter(other -> other.active() && "ADMIN".equals(other.role()))
+                .count() <= 1;
     }
 
     public long accountCount() {

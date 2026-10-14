@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Accounts', 'users', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Administration</p>
+                <h1 class="page__title">Accounts</h1>
+            </div>
+            <p class="page__aside">
+                <span class="mono" th:text="${#lists.size(accounts)}">1</span> accounts
+            </p>
+        </div>
+
+        <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
+        <p class="notice" th:if="${notice}" th:text="${notice}">Done</p>
+
+        <div class="columns">
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Who can sign in</h2>
+                    <span class="label">Professors and administrators</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="account : ${accounts}">
+                            <td class="is-primary" th:text="${account.displayName()}">Name</td>
+                            <td><span class="mono" th:text="${account.email()}">name@thapar.edu</span></td>
+                            <td th:text="${account.role()}">PROFESSOR</td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${account.active()} ? 'badge--pass' : 'badge--fail'"
+                                      th:text="${account.active()} ? 'Active' : 'Disabled'">Active</span>
+                            </td>
+                            <td>
+                                <form method="post" th:action="@{/users/active}">
+                                    <input type="hidden" name="email" th:value="${account.email()}">
+                                    <input type="hidden" name="active" th:value="${!account.active()}">
+                                    <button class="button button--quiet button--small" type="submit"
+                                            th:text="${account.active()} ? 'Disable' : 'Enable'">Disable</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Add an account</h2>
+                    <span class="label">Admin only</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        Professors cannot register themselves. Create the account here and pass the
+                        password on; they can sign in straight away.
+                    </p>
+                    <form method="post" th:action="@{/users}">
+                        <div class="field">
+                            <label class="label" for="displayName">Name</label>
+                            <input class="input" type="text" id="displayName" name="displayName" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="email">Email</label>
+                            <input class="input mono" type="email" id="email" name="email"
+                                   placeholder="name@thapar.edu" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="password">Temporary password</label>
+                            <input class="input" type="text" id="password" name="password"
+                                   placeholder="at least 8 characters" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="role">Role</label>
+                            <select class="input select" id="role" name="role">
+                                <option value="PROFESSOR">Professor — can plan and download</option>
+                                <option value="ADMIN">Administrator — can also manage accounts</option>
+                            </select>
+                        </div>
+                        <button class="button button--full" type="submit">Create account</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

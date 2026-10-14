@@ -28,15 +28,17 @@ public class Workspace {
         this.planner = planner;
     }
 
+    /** Loading data plans it straight away, so exams arrive already scheduled and staffed. */
     public synchronized void setData(ExamData data) {
         this.data = data;
-        this.result = null;
+        this.result = data == null ? null : planner.plan(data, mode);
     }
 
+    /** Changing the mode re-times the whole session rather than leaving a stale plan. */
     public synchronized void setMode(ExamMode mode) {
         if (this.mode != mode) {
             this.mode = mode;
-            this.result = null;
+            this.result = data == null ? null : planner.plan(data, mode);
         }
     }
 

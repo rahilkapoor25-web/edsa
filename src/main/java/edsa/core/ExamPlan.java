@@ -92,6 +92,30 @@ public final class ExamPlan {
                 .toList();
     }
 
+    /** The timetable as rows: one per paper, with its rooms and invigilators counted. */
+    public List<ScheduledPaper> scheduledPapers() {
+        List<RoomSitting> all = sittings();
+        List<ScheduledPaper> rows = new ArrayList<>();
+        for (ExamSlot slot : schedule) {
+            List<RoomSitting> forSlot = all.stream()
+                    .filter(sitting -> sitting.slot().getId().equals(slot.getId()))
+                    .toList();
+            long invigilators = forSlot.stream()
+                    .flatMap(sitting -> sitting.invigilators().stream())
+                    .map(Faculty::getId)
+                    .distinct()
+                    .count();
+            rows.add(new ScheduledPaper(slot.getId(), slot.getPaperCode(), slot.getPaperName(),
+                    slot.getDate().toString(),
+                    slot.getStartTime() + "\u2013" + slot.getEndTime(),
+                    slot.getDurationLabel(),
+                    forSlot.stream().mapToInt(RoomSitting::seated).sum(),
+                    forSlot.size(),
+                    (int) invigilators));
+        }
+        return rows;
+    }
+
     /** The rooms this plan actually uses, in the order the room data lists them. */
     public List<Room> roomsUsed() {
         Set<String> used = new LinkedHashSet<>();

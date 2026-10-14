@@ -60,6 +60,11 @@ public final class ExamSlot {
         return durationMinutes;
     }
 
+    /** The duration as it reads on screen: "10 min", "90 min", "2 h". */
+    public String getDurationLabel() {
+        return Durations.label(durationMinutes);
+    }
+
     public LocalTime getEndTime() {
         return startTime.plusMinutes(durationMinutes);
     }

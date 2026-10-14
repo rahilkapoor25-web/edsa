@@ -11,58 +11,112 @@
                 <p class="label">Seating plan</p>
                 <h1 class="page__title">Room schedule</h1>
                 <p class="page__aside" th:if="${hasPlan}">
-                    <span th:text="${mode.label()}">Endsem</span> ·
-                    <span class="mono" th:text="${mode.defaultMinutes()}">180</span> minutes per paper
+                    <span th:text="${mode.label()}">Midsem</span> ·
+                    <strong th:text="${mode.durationLabel()}">2 h</strong> per paper
                 </p>
             </div>
-            <a class="button" th:if="${hasPlan}" th:href="@{/seating-plan.csv}">Download CSV</a>
+            <div class="actions" th:if="${hasPlan}">
+                <a class="button" th:href="@{/exam-plan.xlsx}">Download Excel</a>
+                <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
+            </div>
         </div>
 
         <section class="card empty" th:unless="${hasPlan}">
             <h2 class="empty__title">No plan yet</h2>
-            <p class="empty__note">Load the data and compute a plan, and the seating will appear here.</p>
+            <p class="empty__note">Import a workbook on Data and Run and the schedule appears here.</p>
             <a class="button" th:href="@{/}">Go to Data and Run</a>
         </section>
 
         <div th:if="${hasPlan}">
             <form class="filter" method="get" th:action="@{/rooms}">
-                <label class="label" for="room">Room</label>
-                <select class="input select" id="room" name="room">
-                    <option value="" th:selected="${room == null or room.isEmpty()}">All rooms</option>
-                    <option th:each="option : ${rooms}"
-                            th:value="${option.id}"
-                            th:selected="${option.id == room}"
-                            th:text="${option.name} + ' (' + ${option.id} + ')'">Seminar Hall (R201)</option>
-                </select>
+                <div>
+                    <label class="label" for="room">Room</label>
+                    <select class="input select" id="room" name="room">
+                        <option value="" th:selected="${room == null or room.isEmpty()}">All rooms</option>
+                        <option th:each="option : ${rooms}"
+                                th:value="${option.id}"
+                                th:selected="${option.id == room}"
+                                th:text="${option.name} + ' (' + ${option.id} + ')'">Hall (R1)</option>
+                    </select>
+                </div>
                 <button class="button button--quiet" type="submit">Filter</button>
+                <a class="button button--quiet" th:href="@{/rooms}" th:if="${room != null and !room.isEmpty()}">Clear</a>
             </form>
 
-            <p class="muted" th:if="${#lists.isEmpty(sittings)}">
-                Nothing is seated in that room.
+            <p class="muted" th:if="${#lists.isEmpty(sittings)}">Nothing is seated in that room.</p>
+
+            <section class="panel" th:unless="${#lists.isEmpty(sittings)}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Sittings</h2>
+                    <span class="label">
+                        <span class="mono" th:text="${#lists.size(sittings)}">18</span> room allocations ·
+                        <span class="mono" th:text="${seatedTotal}">480</span> seats
+                    </span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Paper</th>
+                            <th>Title</th>
+                            <th>Room</th>
+                            <th>Building</th>
+                            <th class="is-numeric">Seated</th>
+                            <th class="is-numeric">Capacity</th>
+                            <th>Invigilator</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="sitting : ${sittings}">
+                            <td class="mono" th:text="${sitting.slot().getDate()}">2026-11-16</td>
+                            <td class="mono"
+                                th:text="${sitting.slot().getStartTime()} + '–' + ${sitting.slot().getEndTime()}">09:00–11:00</td>
+                            <td><span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span></td>
+                            <td class="is-primary" th:text="${sitting.slot().getPaperName()}">Data Structures</td>
+                            <td><span class="code" th:text="${sitting.room().getId()}">LH-01</span></td>
+                            <td th:text="${sitting.room().getBuilding()}">Block A</td>
+                            <td class="is-numeric" th:text="${sitting.seated()}">30</td>
+                            <td class="is-numeric" th:text="${sitting.room().capacity()}">30</td>
+                            <td>
+                                <span class="muted" th:if="${#lists.isEmpty(sitting.invigilators())}">none</span>
+                                <span th:each="member : ${sitting.invigilators()}">
+                                    <span th:text="${member.name}">Dr. Name</span>
+                                    <span class="code" th:text="${member.id}">F01</span>
+                                </span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <p class="muted seating-hint" th:if="${room == null or room.isEmpty()}">
+                Choose a room above to see who sits in which seat.
             </p>
 
-            <section class="panel" th:each="sitting : ${sittings}">
+            <section class="panel" th:each="sitting : ${sittings}"
+                     th:if="${room != null and !room.isEmpty()}">
                 <div class="panel__head">
                     <div>
                         <h2 class="panel__title">
-                            <span th:text="${sitting.room().getName()}">Seminar Hall</span>
-                            <span class="code" th:text="${sitting.room().getId()}">R201</span>
-                        </h2>
-                        <p class="panel__note">
-                            <span class="code" th:text="${sitting.slot().getId()}">E1</span>
                             <span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span>
                             <span th:text="${sitting.slot().getPaperName()}">Data Structures</span>
-                            · <span class="mono" th:text="${sitting.slot().getDate()}">2026-11-10</span>
+                        </h2>
+                        <p class="panel__note">
+                            <span class="mono" th:text="${sitting.slot().getDate()}">2026-11-16</span>
                             <span class="mono"
-                                  th:text="${sitting.slot().getStartTime()} + '-' + ${sitting.slot().getEndTime()}">09:00-12:00</span>
-                            · <span class="mono" th:text="${sitting.slot().getDurationMinutes()} + ' min'">180 min</span>
+                                  th:text="${sitting.slot().getStartTime()} + '–' + ${sitting.slot().getEndTime()}">09:00–11:00</span>
+                            · <span th:text="${sitting.slot().getDurationLabel()}">2 h</span>
+                            · <span th:text="${sitting.room().getName()}">Hall</span>
                         </p>
                     </div>
                     <div class="panel__aside">
                         <span class="label">Invigilator</span>
                         <p class="panel__note" th:if="${#lists.isEmpty(sitting.invigilators())}">none</p>
                         <p class="panel__note" th:each="member : ${sitting.invigilators()}">
-                            <span th:text="${member.name}">Dr. Meera Nair</span>
+                            <span th:text="${member.name}">Dr. Name</span>
                             <span class="code" th:text="${member.id}">F01</span>
                         </p>
                     </div>
@@ -82,7 +136,7 @@
                             <td class="is-numeric" th:text="${placed.row()}">1</td>
                             <td class="is-numeric" th:text="${placed.column()}">1</td>
                             <td><span class="code" th:text="${placed.student().getId()}">S001</span></td>
-                            <td class="is-primary" th:text="${placed.student().getName()}">Aarav Sharma</td>
+                            <td class="is-primary" th:text="${placed.student().getName()}">Student Name</td>
                         </tr>
                         </tbody>
                     </table>

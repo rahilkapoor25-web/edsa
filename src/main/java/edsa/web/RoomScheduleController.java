@@ -1,6 +1,7 @@
 package edsa.web;
 
 import edsa.core.ExamPlan;
+import edsa.data.PlanWorkbook;
 import edsa.data.SeatingPlanCsv;
 
 import java.nio.charset.StandardCharsets;
@@ -31,11 +32,23 @@ public class RoomScheduleController {
             ExamPlan plan = workspace.result().plan();
             model.addAttribute("rooms", plan.roomsUsed());
             model.addAttribute("room", room);
-            model.addAttribute("sittings", room == null || room.isBlank()
-                    ? plan.sittings()
-                    : plan.sittingsIn(room));
+            var sittings = room == null || room.isBlank() ? plan.sittings() : plan.sittingsIn(room);
+            model.addAttribute("sittings", sittings);
+            model.addAttribute("seatedTotal", sittings.stream().mapToInt(s -> s.seated()).sum());
         }
         return "room-schedule";
+    }
+
+    @GetMapping("/exam-plan.xlsx")
+    public ResponseEntity<byte[]> downloadWorkbook() {
+        if (!workspace.hasPlan()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"edsa-exam-plan.xlsx\"")
+                .contentType(MediaType.valueOf(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(PlanWorkbook.write(workspace.result().plan()));
     }
 
     @GetMapping("/seating-plan.csv")

@@ -2,6 +2,7 @@ package edsa.web;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,25 +43,32 @@ class ExamWorkflowTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Quiz")))
                 .andExpect(content().string(containsString("10 min")))
-                .andExpect(content().string(containsString("120 min")))
-                .andExpect(content().string(containsString("180 min")));
+                .andExpect(content().string(containsString("2 h")))
+                .andExpect(content().string(containsString("3 h")));
     }
 
     @Test
     @WithMockUser(username = "admin@thapar.edu")
-    void choosingAModeChangesTheComputedTimings() throws Exception {
+    void loadingDataSchedulesItStraightAway() throws Exception {
+        mvc.perform(post("/data/sample").with(csrf())).andExpect(redirectedUrl("/"));
+
+        assertTrue(workspace.hasPlan(), "the plan is built on import, without pressing compute");
+        assertFalse(workspace.result().plan().schedule().isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "admin@thapar.edu")
+    void choosingAModeRetimesTheTimetableImmediately() throws Exception {
         mvc.perform(post("/data/sample").with(csrf())).andExpect(redirectedUrl("/"));
 
         mvc.perform(post("/mode").param("mode", "QUIZ").with(csrf())).andExpect(redirectedUrl("/"));
-        mvc.perform(post("/compute").with(csrf())).andExpect(redirectedUrl("/"));
         assertEquals(ExamMode.QUIZ, workspace.mode());
         assertEquals(10, workspace.result().plan().schedule().get(0).getDurationMinutes());
 
         mvc.perform(post("/mode").param("mode", "ENDSEM").with(csrf())).andExpect(redirectedUrl("/"));
-        assertTrue(workspace.result() == null, "changing the mode drops the stale plan");
-
-        mvc.perform(post("/compute").with(csrf())).andExpect(redirectedUrl("/"));
-        assertEquals(180, workspace.result().plan().schedule().get(0).getDurationMinutes());
+        assertEquals(180, workspace.result().plan().schedule().get(0).getDurationMinutes(),
+                "the mode change re-times the plan rather than leaving a stale one");
+        assertEquals("3 h", workspace.result().plan().schedule().get(0).getDurationLabel());
     }
 
     @Test

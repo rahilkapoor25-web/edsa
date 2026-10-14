@@ -160,8 +160,8 @@
                                 <input type="radio" name="mode" th:value="${option.name()}"
                                        th:checked="${option == mode}">
                                 <span class="mode__name" th:text="${option.label()}">Midsem</span>
-                                <span class="mode__minutes mono"
-                                      th:text="${option.defaultMinutes()} + ' min'">120 min</span>
+                                <span class="mode__minutes"
+                                      th:text="${option.durationLabel()}">2 h</span>
                             </label>
                         </fieldset>
                         <button class="button button--quiet button--full" type="submit">Use this mode</button>
@@ -169,17 +169,21 @@
 
                     <p class="muted mode__current">
                         Selected: <strong th:text="${mode.label()}">Endsem</strong>,
-                        <span class="mono" th:text="${mode.defaultMinutes()}">180</span> minutes per paper
-                        unless a paper overrides it.
+                        <strong th:text="${mode.durationLabel()}">3 h</strong> per paper
+                        unless a paper sets its own length.
                     </p>
 
                     <p class="muted" th:unless="${hasData}">
                         Load the data first. The scheduler needs students, rooms, faculty and exams.
                     </p>
 
+                    <p class="muted" th:if="${hasData}">
+                        The timetable is built as soon as data is imported, and rebuilt when the mode
+                        changes. Recompute only if you want to run the scheduler again.
+                    </p>
+
                     <form method="post" th:action="@{/compute}" th:if="${hasData}">
-                        <button class="button button--full" type="submit"
-                                th:text="${hasPlan} ? 'Compute again' : 'Compute the timetable'">Compute the timetable</button>
+                        <button class="button button--quiet button--full" type="submit">Recompute</button>
                     </form>
 
                     <div th:if="${hasPlan}">
@@ -233,7 +237,8 @@
                         <div class="actions" th:if="${usable}">
                             <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
                             <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
-                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">Download CSV</a>
+                            <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
+                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
                         </div>
                     </div>
                 </div>
@@ -244,61 +249,33 @@
         <section class="panel" th:if="${hasPlan}">
             <div class="panel__head">
                 <h2 class="panel__title">Timetable</h2>
-                <span class="label" th:text="${mode.label()} + ' · ' + ${mode.defaultMinutes()} + ' minutes'">
-                    Endsem · 180 minutes</span>
+                <span class="label" th:text="${mode.label()} + ' · ' + ${mode.durationLabel()}">
+                    Endsem · 3 h</span>
             </div>
             <div class="table-wrap">
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>Exam</th>
+                        <th>Date</th>
+                        <th>Time</th>
                         <th>Paper</th>
                         <th>Title</th>
-                        <th>Date</th>
-                        <th>Start</th>
-                        <th>End</th>
-                        <th class="is-numeric">Minutes</th>
+                        <th>Length</th>
+                        <th class="is-numeric">Students</th>
+                        <th class="is-numeric">Rooms</th>
+                        <th class="is-numeric">Invigilators</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="slot : ${schedule}">
-                        <td><span class="code" th:text="${slot.id}">E1</span></td>
-                        <td><span class="code" th:text="${slot.paperCode}">CS301</span></td>
-                        <td class="is-primary" th:text="${slot.paperName}">Data Structures</td>
-                        <td class="mono" th:text="${slot.date}">2026-11-10</td>
-                        <td class="mono" th:text="${slot.startTime}">09:00</td>
-                        <td class="mono" th:text="${slot.endTime}">12:00</td>
-                        <td class="is-numeric" th:text="${slot.durationMinutes}">180</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="panel" th:if="${hasData and not hasPlan}">
-            <div class="panel__head">
-                <h2 class="panel__title">Exams loaded</h2>
-                <span class="label">Not yet scheduled</span>
-            </div>
-            <div class="table-wrap">
-                <table class="table">
-                    <thead>
-                    <tr>
-                        <th>Exam</th>
-                        <th>Paper</th>
-                        <th>Title</th>
-                        <th>Date</th>
-                        <th>Permitted start</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:each="exam : ${exams}">
-                        <td><span class="code" th:text="${exam.id}">E1</span></td>
-                        <td><span class="code" th:text="${exam.subjectCode}">CS301</span></td>
-                        <td class="is-primary" th:text="${exam.subjectName}">Data Structures</td>
-                        <td class="mono" th:text="${exam.date}">2026-11-10</td>
-                        <td class="mono"
-                            th:text="${exam.permittedStart.isPresent()} ? ${exam.permittedStart.get()} : 'scheduler chooses'">09:00</td>
+                    <tr th:each="row : ${scheduleRows}">
+                        <td class="mono" th:text="${row.date}">2026-11-16</td>
+                        <td class="mono" th:text="${row.time}">09:00–11:00</td>
+                        <td><span class="code" th:text="${row.paperCode}">CS301</span></td>
+                        <td class="is-primary" th:text="${row.paperName}">Data Structures</td>
+                        <td th:text="${row.length}">2 h</td>
+                        <td class="is-numeric" th:text="${row.students}">180</td>
+                        <td class="is-numeric" th:text="${row.rooms}">6</td>
+                        <td class="is-numeric" th:text="${row.invigilators}">6</td>
                     </tr>
                     </tbody>
                 </table>

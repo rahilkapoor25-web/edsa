@@ -37,8 +37,8 @@
                th:href="@{/rooms}">Room schedule</a>
             <a class="tab" th:classappend="${activeTab == 'workloads'} ? 'tab--active'"
                th:href="@{/workloads}">Workloads</a>
-            <span class="tab tab--soon" title="Not built yet">Disruption</span>
-            <span class="tab tab--soon" title="Not built yet">Reports</span>
+            <a class="tab" th:classappend="${activeTab == 'users'} ? 'tab--active'"
+               th:href="@{/users}" sec:authorize="hasRole('ADMIN')">Accounts</a>
         </div>
     </nav>
 </header>
