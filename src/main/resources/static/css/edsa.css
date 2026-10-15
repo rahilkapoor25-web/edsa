@@ -563,6 +563,15 @@ a.tab:hover {
     margin-bottom: 22px;
 }
 
+.panel--narrow {
+    max-width: 560px;
+}
+
+.table .was {
+    color: var(--ink-500);
+    text-decoration: line-through;
+}
+
 .seating-hint {
     margin-top: 18px;
 }

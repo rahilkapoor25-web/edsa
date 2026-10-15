@@ -1,5 +1,7 @@
 package edsa.core;
 
+import java.util.List;
+
 /**
  * Plans one examination session end to end: schedule the papers, seat the students, staff the
  * rooms, then check the finished plan against every rule independently.
@@ -27,6 +29,11 @@ public final class ExamPlanner {
 
     public SchedulingConfig config() {
         return config;
+    }
+
+    /** Re-checks a plan that was changed after it was built, such as by a repair. */
+    public List<CheckResult> check(ExamPlan plan) {
+        return checker.inspect(plan);
     }
 
     public PlanningResult plan(ExamData data, ExamMode mode) {

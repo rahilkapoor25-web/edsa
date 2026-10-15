@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Disruption', 'disruption', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Duty roster</p>
+                <h1 class="page__title">Disruption</h1>
+                <p class="page__aside">Mark an invigilator absent and cover their rooms.</p>
+            </div>
+            <a class="button button--quiet" th:href="@{/workloads}" th:if="${hasPlan}">Workloads</a>
+        </div>
+
+        <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
+        <p class="notice" th:if="${notice}" th:text="${notice}">Nothing moved</p>
+
+        <section class="card empty" th:unless="${hasPlan}">
+            <h2 class="empty__title">No plan yet</h2>
+            <p class="empty__note">Import a workbook on Data and Run, then come back to cover an absence.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <div th:if="${hasPlan}">
+
+            <section class="panel panel--narrow">
+                <div class="panel__head">
+                    <h2 class="panel__title">Who is away</h2>
+                    <span class="label">Current duties</span>
+                </div>
+                <div class="panel__body">
+                    <form method="post" th:action="@{/disruption}">
+                        <div class="field">
+                            <label class="label" for="facultyId">Invigilator</label>
+                            <select class="input select" id="facultyId" name="facultyId" required>
+                                <option th:each="workload : ${workloads}"
+                                        th:value="${workload.member().getId()}"
+                                        th:text="${workload.member().getName()} + ' (' + ${workload.member().getId()}
+                                                 + ') — ' + ${workload.duties()} + ' duties'">Dr Name (F01) — 2 duties</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="date">Away on</label>
+                            <select class="input select" id="date" name="date">
+                                <option value="">The whole session</option>
+                                <option th:each="day : ${dates}" th:value="${day}" th:text="${day}">2026-11-16</option>
+                            </select>
+                        </div>
+                        <button class="button button--full" type="submit">Cover their duties</button>
+                    </form>
+                    <p class="muted">
+                        Each room is offered to the least-loaded colleague who is free at that time, so
+                        one absence moves one person per room and nobody else is disturbed. Seating is
+                        never touched.
+                    </p>
+                </div>
+            </section>
+
+            <section class="panel" th:if="${repair}">
+                <div class="panel__head">
+                    <h2 class="panel__title">What changed</h2>
+                    <span class="badge"
+                          th:classappend="${repair.isComplete()} ? 'badge--pass' : 'badge--fail'"
+                          th:text="${repair.isComplete()} ? 'All rooms covered' : 'Rooms left uncovered'">Covered</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        <strong th:text="${repair.absent().getName()}">Dr Name</strong>
+                        <span class="code" th:text="${repair.absent().getId()}">F01</span>
+                        was marked absent ·
+                        <span class="mono" th:text="${#lists.size(repair.changes())}">2</span>
+                        <span th:text="${#lists.size(repair.changes()) == 1} ? 'duty' : 'duties'">duties</span>
+                        reassigned
+                    </p>
+
+                    <ul class="problems" th:unless="${repair.isComplete()}">
+                        <li th:each="problem : ${repair.uncovered()}" th:text="${problem}">Uncovered room</li>
+                    </ul>
+                </div>
+                <div class="table-wrap" th:if="${repair.changedAnything()}">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Paper</th>
+                            <th>Room</th>
+                            <th>Was</th>
+                            <th>Now</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="change : ${repair.changes()}">
+                            <td class="mono" th:text="${change.slot().getDate()}">2026-11-16</td>
+                            <td class="mono"
+                                th:text="${change.slot().getStartTime()} + '–' + ${change.slot().getEndTime()}">09:00–11:00</td>
+                            <td><span class="code" th:text="${change.slot().getPaperCode()}">CS301</span></td>
+                            <td><span class="code" th:text="${change.roomId()}">LH-01</span></td>
+                            <td class="was" th:text="${change.from().getName()}">Dr Away</td>
+                            <td class="is-primary">
+                                <span th:text="${change.to().getName()}">Dr Cover</span>
+                                <span class="code" th:text="${change.to().getId()}">F07</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel" th:unless="${repair}">
+                <div class="panel__head">
+                    <h2 class="panel__title">What changed</h2>
+                    <span class="label">Nothing yet</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        Choose an invigilator and the day they are away. The rooms they were covering,
+                        and who takes each one, will be listed here.
+                    </p>
+                </div>
+            </section>
+
+        </div>
+
+    </div>
+</main>
+
+</body>
+</html>

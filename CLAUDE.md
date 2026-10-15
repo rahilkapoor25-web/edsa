@@ -88,9 +88,10 @@ a plan is scored belongs in `edsa.core` — even a single `if` about capacity or
   `Assignment`, `WorkloadLedger`, and `Person` as a shared parent of `Student` and `Faculty`.
 - *The rules:* a `Constraint` interface, split into hard and soft, with one class per rule and
   a `PlanChecker` that runs them all and lists what is broken.
-- *The decisions:* `GreedyAllocator` makes a first plan, `LocalSearchImprover` makes it fairer,
-  `AbsenceRepairer` handles a missing invigilator, `ValidatorThread` keeps checking the plan in
-  the background.
+- *The decisions:* `TimetableScheduler` places the papers, `GreedyAllocator` seats and staffs
+  them, `AbsenceRepairer` covers an invigilator who cannot attend, and `ExamPlanner` runs the
+  three steps plus the independent check. Still to come: `LocalSearchImprover` for fairness
+  and `ValidatorThread` for background re-checking.
 - *The errors:* four custom exceptions — capacity, broken rules, no substitute available, bad
   input files.
 
@@ -106,11 +107,14 @@ Controllers and Thymeleaf templates for Import, Solve, Plan viewer, Disruption a
 The Solve page starts the job on a background thread and polls for progress, so the browser
 never sits waiting for the solver.
 
-Built so far: **Data and Run** (`/`) loads the four files or the bundled sample, shows row
-counts, computes a plan and lists every rule with pass/fail and a breach count; **Room
-schedule** (`/rooms`) shows the seating plan, filterable by room, with a CSV download at
-`/seating-plan.csv`; **Workloads** (`/workloads`) shows duties per invigilator. `Workspace`
-holds the loaded data and the computed plan for the whole application.
+Built so far: **Data and Run** (`/`) imports the workbook, picks the mode and lists every rule
+with pass/fail and a breach count; **Room schedule** (`/rooms`) shows the sittings as one
+table, with seat-by-seat grids once a room is chosen; **Workloads** (`/workloads`) shows duties
+per invigilator; **Disruption** (`/disruption`) covers an absence and shows the diff;
+**Accounts** (`/users`, administrators only) creates and disables accounts. Downloads:
+`/exam-plan.xlsx` (Timetable, Seating and Duties sheets), `/seating-plan.csv`, and
+`/import-template.xlsx`. `Workspace` holds the loaded data, the chosen mode, the computed plan
+and the last repair; importing data or changing the mode plans it straight away.
 
 Controllers ask the core and hand the answer to the template — no filtering, counting or
 grouping in a controller. When a page needs the plan shaped a particular way, that shape is a
@@ -198,6 +202,16 @@ workbook leaves the database exactly as it was. `/import-template.xlsx` download
 example to start from.
 
 The four-CSV upload and the bundled sample data still work, unchanged.
+
+## Covering an absence
+
+`AbsenceRepairer` takes the duties of an invigilator who cannot attend — for one day or the
+whole session — and offers each room to the least-loaded colleague who is free at that time.
+One absence therefore moves one person per room and disturbs nobody else, and seating is never
+touched. No cascade is attempted: when nobody is free for a room, that room is reported as
+uncovered rather than fixed by shuffling three other people, because the coordinator needs to
+know. The repaired roster replaces the current one and is re-checked, so the other pages and
+the downloads show the plan as it now stands.
 
 ## Rules and scoring
 

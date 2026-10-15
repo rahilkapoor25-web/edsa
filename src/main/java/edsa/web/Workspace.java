@@ -4,7 +4,11 @@ import edsa.core.ExamData;
 import edsa.core.ExamMode;
 import edsa.core.ExamPlanner;
 import edsa.core.PlanningResult;
+import edsa.core.RepairResult;
 import edsa.core.SchedulingConfig;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.stereotype.Component;
 
@@ -23,6 +27,7 @@ public class Workspace {
     private ExamData data;
     private ExamMode mode = ExamMode.ENDSEM;
     private PlanningResult result;
+    private RepairResult lastRepair;
 
     public Workspace(ExamPlanner planner) {
         this.planner = planner;
@@ -32,6 +37,7 @@ public class Workspace {
     public synchronized void setData(ExamData data) {
         this.data = data;
         this.result = data == null ? null : planner.plan(data, mode);
+        this.lastRepair = null;
     }
 
     /** Changing the mode re-times the whole session rather than leaving a stale plan. */
@@ -39,6 +45,7 @@ public class Workspace {
         if (this.mode != mode) {
             this.mode = mode;
             this.result = data == null ? null : planner.plan(data, mode);
+            this.lastRepair = null;
         }
     }
 
@@ -62,10 +69,27 @@ public class Workspace {
         return planner.config();
     }
 
-    /** Plans the loaded data under the current mode, replacing any earlier plan. */
+    /** Plans the loaded data under the current mode, replacing any earlier plan and repair. */
     public synchronized PlanningResult compute() {
         result = planner.plan(data, mode);
+        lastRepair = null;
         return result;
+    }
+
+    /**
+     * Puts a repaired roster in place of the current one and re-checks it, so the pages and
+     * the downloads show the plan as it now stands rather than as it was first computed.
+     */
+    public synchronized void applyRepair(RepairResult repair) {
+        List<String> allocationProblems = new ArrayList<>(result.allocationProblems());
+        allocationProblems.addAll(repair.uncovered());
+        result = new PlanningResult(repair.plan(), result.schedulingProblems(),
+                List.copyOf(allocationProblems), planner.check(repair.plan()));
+        lastRepair = repair;
+    }
+
+    public synchronized RepairResult lastRepair() {
+        return lastRepair;
     }
 
     public synchronized PlanningResult result() {
