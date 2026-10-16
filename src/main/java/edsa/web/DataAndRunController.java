@@ -64,6 +64,7 @@ public class DataAndRunController {
             model.addAttribute("examCount", data.exams().size());
             model.addAttribute("exams", data.exams());
             model.addAttribute("seatCount", data.rooms().stream().mapToInt(room -> room.capacity()).sum());
+            model.addAttribute("ignoredOverrides", data.ignoredDurationOverrides(workspace.mode()));
         }
 
         PlanningResult result = workspace.result();

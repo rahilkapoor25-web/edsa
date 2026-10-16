@@ -169,8 +169,20 @@
 
                     <p class="muted mode__current">
                         Selected: <strong th:text="${mode.label()}">Endsem</strong>,
-                        <strong th:text="${mode.durationLabel()}">3 h</strong> per paper
-                        unless a paper sets its own length.
+                        <strong th:text="${mode.durationLabel()}">3 h</strong> per paper<span
+                            th:if="${mode.allowsDurationOverride()}"> unless a paper sets its own
+                        length</span>. The mode decides every start and end time.
+                    </p>
+
+                    <p class="notice" th:if="${ignoredOverrides != null and !#lists.isEmpty(ignoredOverrides)}">
+                        <span th:text="${#lists.size(ignoredOverrides)}">1</span>
+                        <span th:text="${#lists.size(ignoredOverrides) == 1} ? 'paper declares' : 'papers declare'">papers declare</span>
+                        a length this mode does not accept, so
+                        <strong th:text="${mode.durationLabel()}">10 min</strong> is used instead:
+                        <span th:each="ignored, state : ${ignoredOverrides}">
+                            <span th:text="${ignored}">CS301 (E1) declares 90 minutes</span><span
+                                th:unless="${state.last}">; </span>
+                        </span>
                     </p>
 
                     <p class="muted" th:unless="${hasData}">

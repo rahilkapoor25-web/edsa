@@ -227,4 +227,90 @@ class WorkbookImportTest {
         assertEquals(3, report.students());
         assertEquals(3, report.exams());
     }
+
+    // ── The Faculty worksheet's Email column ─────────────────────────────────────────────
+
+    /** The valid workbook with its Faculty worksheet replaced. */
+    private static byte[] withFacultyRows(java.util.List<java.util.List<String>> rows) {
+        return WorkbookBuilder.valid()
+                .replace("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Available"), rows)
+                .build();
+    }
+
+    @Test
+    void theFacultyEmailIsImportedAndStored() {
+        ImportReport report = importOf(WorkbookBuilder.valid().build());
+
+        assertTrue(report.successful(), String.valueOf(report.errors()));
+        assertEquals("f1@example.edu", jdbc.queryForObject(
+                "SELECT email FROM faculty WHERE id = 'F01'", String.class));
+        assertEquals(3, repository.facultyContacts().size(),
+                "an unavailable member still needs to be able to sign in");
+        assertTrue(repository.facultyContacts().stream().allMatch(FacultyContact::hasEmail));
+    }
+
+    @Test
+    void theEmailIsStoredLowerCased() {
+        importOf(withFacultyRows(List.of(
+                List.of("F01", "Faculty One", "Mixed.Case@Example.EDU", "CSE", "yes"))));
+
+        assertEquals("mixed.case@example.edu", jdbc.queryForObject(
+                "SELECT email FROM faculty WHERE id = 'F01'", String.class));
+    }
+
+    @Test
+    void aFacultyMemberWithNoEmailIsStillImported() {
+        ImportReport report = importOf(withFacultyRows(List.of(
+                List.of("F01", "Faculty One", "", "CSE", "yes"))));
+
+        assertTrue(report.successful(), String.valueOf(report.errors()));
+        assertEquals(1, report.faculty());
+        FacultyContact stored = repository.facultyContacts().get(0);
+        assertFalse(stored.hasEmail(), "they simply cannot be given an account");
+    }
+
+    @Test
+    void aMalformedFacultyEmailIsReportedWithItsRow() {
+        ImportReport report = importOf(withFacultyRows(List.of(
+                List.of("F01", "Faculty One", "f1@example.edu", "CSE", "yes"),
+                List.of("F02", "Faculty Two", "not-an-address", "ECE", "yes"))));
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().get(0).contains("Worksheet 'Faculty', row 3, column 'Email'"),
+                report.errors().toString());
+        assertTrue(report.errors().get(0).contains("is not an email address"), report.errors().toString());
+        assertFalse(repository.hasData(), "a refused workbook changes nothing");
+    }
+
+    @Test
+    void twoFacultyRowsSharingOneEmailAreReported() {
+        ImportReport report = importOf(withFacultyRows(List.of(
+                List.of("F01", "Faculty One", "shared@example.edu", "CSE", "yes"),
+                List.of("F02", "Faculty Two", "shared@example.edu", "ECE", "yes"))));
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().get(0).contains("already used by F01"), report.errors().toString());
+    }
+
+    @Test
+    void aDuplicateFacultyIdIsStillReported() {
+        ImportReport report = importOf(withFacultyRows(List.of(
+                List.of("F01", "Faculty One", "f1@example.edu", "CSE", "yes"),
+                List.of("F01", "Faculty One Again", "f1b@example.edu", "CSE", "yes"))));
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().get(0).contains("'F01' appears more than once"), report.errors().toString());
+    }
+
+    @Test
+    void aWorkbookWithoutAnEmailColumnStillImports() {
+        ImportReport report = importOf(WorkbookBuilder.valid()
+                .replace("Faculty", List.of("Faculty ID", "Name", "Department", "Available"),
+                        List.of(List.of("F01", "Faculty One", "CSE", "yes")))
+                .build());
+
+        assertTrue(report.successful(), String.valueOf(report.errors()));
+        assertFalse(repository.facultyContacts().get(0).hasEmail(),
+                "Email stays optional, so an older workbook is not rejected");
+    }
 }

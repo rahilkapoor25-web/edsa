@@ -51,7 +51,10 @@ public class SecurityConfig {
         http
                 .authenticationManager(authenticationManager)
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers("/login", "/css/**", "/favicon.ico", "/error").permitAll()
+                        // /activate is open by design: an account awaiting activation cannot
+                        // sign in, so its owner has no other way to set a password. The
+                        // link's random single-use secret is the credential.
+                        .requestMatchers("/login", "/activate", "/css/**", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/users/**", "/users").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(login -> login

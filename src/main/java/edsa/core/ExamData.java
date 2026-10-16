@@ -75,6 +75,22 @@ public final class ExamData {
                 .toList();
     }
 
+    /**
+     * The papers whose declared length this mode refuses, and what they will run for instead.
+     *
+     * <p>A Quiz is always ten minutes, so a {@code Duration Minutes} value left over from a
+     * longer sitting is ignored. That is reported here rather than applied, so a page can tell
+     * the coordinator the figure in the workbook was not used.
+     */
+    public List<String> ignoredDurationOverrides(ExamMode mode) {
+        return exams.stream()
+                .filter(exam -> exam.overrideIgnoredUnder(mode))
+                .map(exam -> exam.getSubjectCode() + " (" + exam.getId() + ") declares "
+                        + exam.getDurationOverrideMinutes().orElseThrow() + " minutes, but a "
+                        + mode.label() + " paper runs for " + mode.defaultMinutes() + " minutes")
+                .toList();
+    }
+
     /** Capacity of a room, falling back to the configured assumption when it has none of its own. */
     public int capacityOf(String roomId, SchedulingConfig config) {
         Room room = roomsById.get(roomId);

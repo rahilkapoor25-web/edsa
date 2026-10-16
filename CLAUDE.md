@@ -86,6 +86,8 @@ a plan is scored belongs in `edsa.core` — even a single `if` about capacity or
 
 - *The things:* `Student`, `Faculty`, `Room`, `ExamSlot`, `Seat`, `SeatingPlan`, `DutyRoster`,
   `Assignment`, `WorkloadLedger`, and `Person` as a shared parent of `Student` and `Faculty`.
+  Plus, for absences: `AbsenceWindow` (an interval somebody is away), `Absence`, `LeaveRequest`
+  and `LeaveStatus`.
 - *The rules:* a `Constraint` interface, split into hard and soft, with one class per rule and
   a `PlanChecker` that runs them all and lists what is broken.
 - *The decisions:* `TimetableScheduler` places the papers, `GreedyAllocator` seats and staffs
@@ -99,7 +101,10 @@ a plan is scored belongs in `edsa.core` — even a single `if` about capacity or
 
 Reads the four CSVs and checks every row, writes the reports out, loads them into the
 database, saves and reloads finished plans, keeps a log of what the coordinator did. A bad row
-is reported with the file name and line number rather than skipped quietly.
+is reported with the file name and line number rather than skipped quietly. Also stores the
+recorded absences (`LeaveRequestRepository`) and reads the imported faculty back out with
+their contact details (`ExamDataRepository.facultyContacts()`, `FacultyContact`) for the
+Accounts page to provision from.
 
 **`edsa.web` — the five pages**
 
@@ -110,7 +115,7 @@ never sits waiting for the solver.
 Built so far: **Data and Run** (`/`) imports the workbook, picks the mode and lists every rule
 with pass/fail and a breach count; **Room schedule** (`/rooms`) shows the sittings as one
 table, with seat-by-seat grids once a room is chosen; **Workloads** (`/workloads`) shows duties
-per invigilator; **Disruption** (`/disruption`) covers an absence and shows the diff;
+per invigilator; **Disruption** (`/disruption`) records an absence, has it confirmed or rejected, and shows the diff;
 **Accounts** (`/users`, administrators only) creates and disables accounts. Downloads:
 `/exam-plan.xlsx` (Timetable, Seating and Duties sheets), `/seating-plan.csv`, and
 `/import-template.xlsx`. `Workspace` holds the loaded data, the chosen mode, the computed plan
@@ -160,13 +165,45 @@ EDSA_SEEDADMIN_PASSWORD=<a password you choose, at least 8 characters>
 Leave them unset in production and provision accounts through `AccountService.register(...)`
 instead. Never commit a password to `application.properties`.
 
+**Creating professors' accounts in bulk.** The Accounts page provisions accounts from the
+faculty records the workbook import already stored — there is no second upload. The Faculty
+worksheet's optional `Email` column is what an account is made from; a malformed or repeated
+address is reported with its worksheet, row and column at import time. `/users` previews every
+imported record and why it is eligible, skipped or unusable, and the administrator confirms
+before anything is inserted. Each new account is tied to its **faculty id** (never a name — an
+id is stable across imports and two people may share a name), gets the `PROFESSOR` role, and
+is created disabled.
+
+**No password is ever generated.** A password derived from an id, a name or an email is
+guessable by anyone holding the spreadsheet. Instead each account holds the BCrypt hash of a
+256-bit single-use secret that expires (`edsa.accounts.activation-valid-hours`, a week by
+default); the professor sets their own password at `/activate?token=…`, which is what enables
+the account. Email delivery is not configured in this application, so the links are shown to
+the administrator once, on screen, to pass on — they are never stored in readable form, never
+logged, and never shown twice (which is why that one POST renders its result directly instead
+of redirecting). Provisioning runs in one transaction, so a failure leaves no half-created
+batch, and an account that already exists is skipped with its password, role and faculty
+mapping untouched.
+
 Authentication is kept clear of allocation: nothing in `edsa.core` knows accounts exist.
+`edsa.auth` may use `edsa.data` (it reads the imported faculty records); nothing imports
+`edsa.auth` except `edsa.web`, so the arrows still point one way:
+`edsa.web → edsa.auth → edsa.data → edsa.core`.
 
 ## Exam modes
 
 `ExamMode` holds the three kinds and how long one sitting lasts: **Quiz 10 minutes, Midsem 120,
-Endsem 180**. The duration is the only difference between them — one scheduler serves all
-three — and a paper may carry its own validated `Duration Minutes` override.
+Endsem 180**. The duration is the only difference between them — one scheduler serves all three.
+
+**The mode is the authority on duration, not the workbook.** `ExamMode.minutesFor(override)` is
+the single place that decides how long a sitting runs, and every other component asks it:
+`Exam.durationUnder(mode)` delegates to it, `TimetableScheduler` times each slot from it, and
+`ExamDurationConstraint` independently asks it again afterwards and compares. A paper may set
+its own length under Midsem or Endsem, within `ExamMode.MAX_OVERRIDE_MINUTES` (300). **A Quiz
+is always exactly 10 minutes**: a stale `Duration Minutes` value left in a workbook cannot
+stretch one. An override the mode refuses is reported rather than silently applied —
+`ExamData.ignoredDurationOverrides(mode)` lists them and the Data and Run page says which
+papers declared a length that was not used.
 
 Changing the mode drops the plan built under the previous one (`Workspace`), so a stale
 timetable is never shown: the next compute re-times every sitting.
@@ -205,13 +242,33 @@ The four-CSV upload and the bundled sample data still work, unchanged.
 
 ## Covering an absence
 
-`AbsenceRepairer` takes the duties of an invigilator who cannot attend — for one day or the
-whole session — and offers each room to the least-loaded colleague who is free at that time.
-One absence therefore moves one person per room and disturbs nobody else, and seating is never
-touched. No cascade is attempted: when nobody is free for a room, that room is reported as
-uncovered rather than fixed by shuffling three other people, because the coordinator needs to
-know. The repaired roster replaces the current one and is re-checked, so the other pages and
-the downloads show the plan as it now stands.
+**Nothing is automatic, because the application does not decide that somebody is ill.** An
+absence is *recorded* as a `LeaveRequest` with status `PENDING` and a configurable confirmation
+deadline (`edsa.leave.confirm-within-hours`, 24 by default). A pending request changes no duty.
+A `REJECTED` one changes no duty. A deadline going by changes no duty — `isOverdueForReview`
+flags it for chasing, and it stays pending, because silence is not approval. Duties move at
+exactly one moment: when an administrator confirms. Requests live in the `leave_request` table,
+so one nobody has reviewed is still waiting after a restart.
+
+Any signed-in account may record an absence — a professor reporting their own — but confirming
+or rejecting is `hasRole('ADMIN')`. `LeaveWorkflow` sequences it; every rule it applies belongs
+to `edsa.core` (`LeaveRequest.mayReassign()`, `AbsenceWindow.covers`, `AbsenceRepairer`).
+
+`AbsenceWindow` is the absence as an interval, start-inclusive and end-exclusive like every
+other interval here, so **only the duties the absence actually overlaps are touched**: somebody
+away 09:00–12:00 loses the paper running 09:00–11:00 and keeps the one starting at 12:00. It
+covers a few hours, a whole day, several days or the whole session.
+
+Once confirmed, `AbsenceRepairer` offers each affected room to the least-loaded colleague who
+is free at that time and not themselves away on confirmed leave. One absence therefore moves
+one person per room and disturbs nobody else, and seating is never touched. No cascade is
+attempted: when nobody is free for a room, that room is reported as uncovered rather than fixed
+by shuffling three other people, because the coordinator needs to know. The repair is
+all-or-nothing by construction — a whole new `DutyRoster` is built and the plan handed in is
+never modified — so the caller either adopts the complete repaired roster or keeps the original,
+and there is no state in which some duties moved and others silently did not. The repaired
+roster replaces the current one and is re-checked, so the other pages and the downloads show
+the plan as it now stands.
 
 ## Rules and scoring
 

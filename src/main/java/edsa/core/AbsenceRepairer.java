@@ -1,7 +1,7 @@
 package edsa.core;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -10,26 +10,43 @@ import java.util.Map;
 /**
  * Covers an invigilator who cannot attend, moving as few other people as possible.
  *
- * <p>Each of the absent member's duties is offered to the least-loaded colleague who is free
- * at that time, so one absence moves one person per duty and nobody else is disturbed. No
- * cascade is attempted: if nobody is free for a room, that is reported rather than fixed by
- * shuffling three other people, because the coordinator needs to know a room is uncovered.
+ * <p>Only the duties that fall inside the absence are touched. A professor away for one
+ * morning loses that morning's rooms and keeps the afternoon's, because the absence and the
+ * sitting are compared as intervals rather than by date — see
+ * {@link AbsenceWindow#covers(ExamSlot)}.
+ *
+ * <p>Each affected duty is offered to the least-loaded colleague who is free at that time, so
+ * one absence moves one person per duty and nobody else is disturbed. A colleague is free only
+ * when they have no clashing duty and are not themselves away. No cascade is attempted: if
+ * nobody is free for a room, that is reported rather than fixed by shuffling three other
+ * people, because the coordinator needs to know a room is uncovered.
+ *
+ * <p>The repair is all-or-nothing by construction. A fresh {@link DutyRoster} is built and
+ * returned inside a new plan; the plan handed in is never modified, so a caller either adopts
+ * the whole repaired roster or keeps the whole original one. There is no state in which some
+ * duties moved and others silently did not.
  *
  * <p>Seating is untouched — students sit where they were told to sit.
  */
 public final class AbsenceRepairer {
 
     /**
-     * Replaces the absent member's duties.
+     * Replaces the duties the absence covers.
      *
-     * @param onlyOn the day they are away, or null when they are away for the whole session
+     * @param window    when they are away
+     * @param othersAway everyone else already known to be away, so a room is never handed to
+     *                   a colleague who cannot take it either
      */
-    public RepairResult repair(ExamPlan plan, String absentFacultyId, LocalDate onlyOn) {
+    public RepairResult repair(ExamPlan plan, String absentFacultyId, AbsenceWindow window,
+                               Collection<Absence> othersAway) {
         Faculty absent = plan.data().facultyMember(absentFacultyId);
         if (absent == null) {
             return new RepairResult(plan, null, List.of(),
                     List.of("There is no invigilator with id " + absentFacultyId));
         }
+
+        List<Absence> unavailable = new ArrayList<>(othersAway);
+        unavailable.removeIf(other -> other.facultyId().equals(absentFacultyId));
 
         Map<String, List<ExamSlot>> covers = coversBySlotHolder(plan);
         List<DutyChange> changes = new ArrayList<>();
@@ -40,13 +57,13 @@ public final class AbsenceRepairer {
             ExamSlot slot = plan.slot(duty.slotId());
             boolean affected = duty.facultyId().equals(absentFacultyId)
                     && slot != null
-                    && (onlyOn == null || slot.getDate().equals(onlyOn));
+                    && window.covers(slot);
             if (!affected) {
                 repaired.assign(duty);
                 continue;
             }
 
-            Faculty replacement = freeReplacement(plan, slot, absentFacultyId, covers);
+            Faculty replacement = freeReplacement(plan, slot, absentFacultyId, covers, unavailable);
             if (replacement == null) {
                 uncovered.add("Nobody is free to take " + duty.roomId() + " for " + slot.getPaperCode()
                         + " on " + slot.getDate() + " at " + slot.getStartTime() + "-" + slot.getEndTime());
@@ -62,11 +79,18 @@ public final class AbsenceRepairer {
         return new RepairResult(newPlan, absent, List.copyOf(changes), List.copyOf(uncovered));
     }
 
-    /** The least-loaded colleague with no clashing duty, or null when there is none. */
+    /** The same, when nobody else is known to be away. */
+    public RepairResult repair(ExamPlan plan, String absentFacultyId, AbsenceWindow window) {
+        return repair(plan, absentFacultyId, window, List.of());
+    }
+
+    /** The least-loaded colleague with no clashing duty and no absence of their own. */
     private Faculty freeReplacement(ExamPlan plan, ExamSlot slot, String absentFacultyId,
-                                    Map<String, List<ExamSlot>> covers) {
+                                    Map<String, List<ExamSlot>> covers, List<Absence> unavailable) {
         return plan.data().faculty().stream()
                 .filter(candidate -> !candidate.getId().equals(absentFacultyId))
+                .filter(candidate -> unavailable.stream()
+                        .noneMatch(away -> away.rulesOut(candidate.getId(), slot)))
                 .filter(candidate -> covers.getOrDefault(candidate.getId(), List.of()).stream()
                         .noneMatch(slot::overlaps))
                 .min(Comparator.comparingInt((Faculty candidate) ->

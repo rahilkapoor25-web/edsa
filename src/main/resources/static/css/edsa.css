@@ -19,6 +19,10 @@
     --red-600: #b42318;
     --red-400: #f0a9a2;
 
+    /* Only for a decision somebody still owes us */
+    --amber-700: #8a5a00;
+    --amber-300: #e6c07a;
+
     --surface: #ffffff;
     --canvas: #f5f6f8;
     --line: #e3e6ea;
@@ -599,6 +603,32 @@ a.tab:hover {
     border-color: var(--red-400);
     background: #fdf2f1;
     color: var(--red-600);
+}
+
+/* Awaiting a human decision: not a pass, not a failure. */
+.badge--wait {
+    border-color: var(--amber-300);
+    background: #fdf6e8;
+    color: var(--amber-700);
+}
+
+/* A review deadline that went by. Still pending, and still changing nothing. */
+.badge--late {
+    border-color: var(--amber-300);
+    background: #fdf6e8;
+    color: var(--amber-700);
+    font-weight: 700;
+}
+
+/* The decided-leave log sits quieter than the action it follows. */
+.row-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.leave-reason {
+    color: var(--ink-500);
+    font-size: 13px;
 }
 
 .figures {

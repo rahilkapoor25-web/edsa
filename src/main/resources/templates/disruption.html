@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
       th:replace="~{layout :: page('Disruption', 'disruption', ~{:: main})}">
 <body>
 
@@ -10,7 +11,7 @@
             <div>
                 <p class="label">Duty roster</p>
                 <h1 class="page__title">Disruption</h1>
-                <p class="page__aside">Mark an invigilator absent and cover their rooms.</p>
+                <p class="page__aside">Record an absence, have it confirmed, and cover the rooms it affects.</p>
             </div>
             <a class="button button--quiet" th:href="@{/workloads}" th:if="${hasPlan}">Workloads</a>
         </div>
@@ -20,7 +21,7 @@
 
         <section class="card empty" th:unless="${hasPlan}">
             <h2 class="empty__title">No plan yet</h2>
-            <p class="empty__note">Import a workbook on Data and Run, then come back to cover an absence.</p>
+            <p class="empty__note">Import a workbook on Data and Run, then come back to record an absence.</p>
             <a class="button" th:href="@{/}">Go to Data and Run</a>
         </section>
 
@@ -28,11 +29,11 @@
 
             <section class="panel panel--narrow">
                 <div class="panel__head">
-                    <h2 class="panel__title">Who is away</h2>
-                    <span class="label">Current duties</span>
+                    <h2 class="panel__title">Report an absence</h2>
+                    <span class="label">Pending until confirmed</span>
                 </div>
                 <div class="panel__body">
-                    <form method="post" th:action="@{/disruption}">
+                    <form method="post" th:action="@{/disruption/leave}">
                         <div class="field">
                             <label class="label" for="facultyId">Invigilator</label>
                             <select class="input select" id="facultyId" name="facultyId" required>
@@ -43,19 +44,104 @@
                             </select>
                         </div>
                         <div class="field">
-                            <label class="label" for="date">Away on</label>
-                            <select class="input select" id="date" name="date">
-                                <option value="">The whole session</option>
-                                <option th:each="day : ${dates}" th:value="${day}" th:text="${day}">2026-11-16</option>
-                            </select>
+                            <label class="label" for="from">Away from</label>
+                            <input class="input mono" type="datetime-local" id="from" name="from"
+                                   th:value="${firstDay} + 'T09:00'">
                         </div>
-                        <button class="button button--full" type="submit">Cover their duties</button>
+                        <div class="field">
+                            <label class="label" for="to">Away until</label>
+                            <input class="input mono" type="datetime-local" id="to" name="to"
+                                   th:value="${firstDay} + 'T12:00'">
+                            <p class="leave-reason">
+                                The end is exclusive, so 09:00 to 12:00 takes the paper running 09:00–11:00
+                                and leaves one starting at 12:00 alone.
+                            </p>
+                        </div>
+                        <div class="field">
+                            <label class="label">
+                                <input type="checkbox" name="wholeSession" value="yes">
+                                Away for the whole session instead
+                            </label>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="reason">Reason (optional)</label>
+                            <input class="input" type="text" id="reason" name="reason" maxlength="300"
+                                   placeholder="Reported sick">
+                        </div>
+                        <div class="field">
+                            <label class="label" for="confirmBy">Confirm by</label>
+                            <input class="input mono" type="datetime-local" id="confirmBy" name="confirmBy"
+                                   th:value="${defaultDeadline}">
+                        </div>
+                        <button class="button button--full" type="submit">Record the absence</button>
                     </form>
                     <p class="muted">
-                        Each room is offered to the least-loaded colleague who is free at that time, so
-                        one absence moves one person per room and nobody else is disturbed. Seating is
-                        never touched.
+                        Recording an absence changes nothing on its own. An administrator confirms or
+                        rejects it, and only a confirmation moves a duty: each affected room is then
+                        offered to the least-loaded colleague who is free at that time. Seating is never
+                        touched.
                     </p>
+                </div>
+            </section>
+
+            <section class="panel" th:if="${!#lists.isEmpty(requests)}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Leave requests</h2>
+                    <span class="label">
+                        <span class="mono" th:text="${#lists.size(requests)}">3</span> recorded
+                    </span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Invigilator</th>
+                            <th>Away</th>
+                            <th>Recorded</th>
+                            <th>Confirm by</th>
+                            <th>Status</th>
+                            <th>Outcome</th>
+                            <th sec:authorize="hasRole('ADMIN')"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="request : ${requests}">
+                            <td class="is-primary">
+                                <span th:text="${request.facultyName()}">Dr Name</span>
+                                <span class="code" th:text="${request.facultyId()}">F01</span>
+                                <p class="leave-reason" th:if="${request.reason()}"
+                                   th:text="${request.reason()}">Reported sick</p>
+                            </td>
+                            <td class="mono" th:text="${request.window().describe()}">2026-11-16 09:00–12:00</td>
+                            <td class="mono" th:text="${#temporals.format(request.requestedAt(), 'yyyy-MM-dd HH:mm')}">
+                                2026-11-15 18:20</td>
+                            <td class="mono" th:text="${#temporals.format(request.confirmBy(), 'yyyy-MM-dd HH:mm')}">
+                                2026-11-16 18:20</td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${request.status().name() == 'REJECTED'} ? 'badge--fail'
+                                          : (${request.status().isOpen()} ? 'badge--wait' : 'badge--pass')"
+                                      th:text="${request.status().label()}">Pending</span>
+                                <span class="badge badge--late" th:if="${request.isOverdueForReview(now)}">
+                                    Overdue for review</span>
+                            </td>
+                            <td th:text="${request.outcome()} ?: ${request.status().explanation()}">
+                                Awaiting confirmation</td>
+                            <td sec:authorize="hasRole('ADMIN')">
+                                <div class="row-actions" th:if="${request.status().isOpen()}">
+                                    <form method="post"
+                                          th:action="@{'/disruption/leave/' + ${request.id()} + '/confirm'}">
+                                        <button class="button button--small" type="submit">Confirm</button>
+                                    </form>
+                                    <form method="post"
+                                          th:action="@{'/disruption/leave/' + ${request.id()} + '/reject'}">
+                                        <button class="button button--quiet button--small" type="submit">Reject</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -70,7 +156,7 @@
                     <p class="muted">
                         <strong th:text="${repair.absent().getName()}">Dr Name</strong>
                         <span class="code" th:text="${repair.absent().getId()}">F01</span>
-                        was marked absent ·
+                        was confirmed absent ·
                         <span class="mono" th:text="${#lists.size(repair.changes())}">2</span>
                         <span th:text="${#lists.size(repair.changes()) == 1} ? 'duty' : 'duties'">duties</span>
                         reassigned
@@ -117,7 +203,7 @@
                 </div>
                 <div class="panel__body">
                     <p class="muted">
-                        Choose an invigilator and the day they are away. The rooms they were covering,
+                        Record an absence above. Once an administrator confirms it, the rooms it affects,
                         and who takes each one, will be listed here.
                     </p>
                 </div>

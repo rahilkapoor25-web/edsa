@@ -50,8 +50,9 @@ public class ExamDataRepository {
                     student.getId(), student.getName(), student.getDepartment());
         }
         for (Faculty member : workbook.faculty()) {
-            jdbc.update("INSERT INTO faculty (id, name, department, available) VALUES (?, ?, ?, ?)",
-                    member.getId(), member.getName(), member.getDepartment(),
+            jdbc.update("INSERT INTO faculty (id, name, email, department, available) VALUES (?, ?, ?, ?, ?)",
+                    member.getId(), member.getName(),
+                    workbook.facultyEmails().get(member.getId()), member.getDepartment(),
                     workbook.facultyAvailability().getOrDefault(member.getId(), true));
         }
         for (Room room : workbook.rooms()) {
@@ -71,6 +72,19 @@ public class ExamDataRepository {
                     exam.getPermittedStart().map(Time::valueOf).orElse(null),
                     exam.getDurationOverrideMinutes().orElse(null));
         }
+    }
+
+    /**
+     * Every imported faculty member with their contact details, available or not.
+     *
+     * <p>This is what the Accounts page provisions from: the records the administrator already
+     * imported, read back by their stable ids. Unavailable members are included — somebody who
+     * is not invigilating this session still needs to be able to sign in.
+     */
+    public List<FacultyContact> facultyContacts() {
+        return jdbc.query("SELECT id, name, email, department FROM faculty ORDER BY id",
+                (rs, row) -> new FacultyContact(rs.getString("id"), rs.getString("name"),
+                        rs.getString("email"), rs.getString("department")));
     }
 
     public boolean hasData() {

@@ -56,9 +56,23 @@ public final class Exam {
         return Optional.ofNullable(durationOverrideMinutes);
     }
 
-    /** How long this exam runs under the given mode, honouring a validated override. */
+    /**
+     * How long this exam runs under the given mode.
+     *
+     * <p>The mode decides, not the workbook: a declared length is used only where the mode
+     * accepts one, so a Quiz is ten minutes whatever the {@code Duration Minutes} column says.
+     */
     public int durationUnder(ExamMode mode) {
-        return durationOverrideMinutes != null ? durationOverrideMinutes : mode.defaultMinutes();
+        return mode.minutesFor(durationOverrideMinutes);
+    }
+
+    /**
+     * True when this paper declared a length the mode refuses, so the mode's own length is
+     * used instead. The pages report it rather than silently timing the paper differently
+     * from the figure in the workbook.
+     */
+    public boolean overrideIgnoredUnder(ExamMode mode) {
+        return durationOverrideMinutes != null && !mode.permits(durationOverrideMinutes);
     }
 
     @Override

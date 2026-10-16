@@ -14,7 +14,9 @@ import java.util.Map;
  * Everything one workbook contained, after parsing and validation.
  *
  * <p>Availability is kept beside the records rather than inside them: an unavailable room or
- * invigilator is still imported, it is simply left out of the pool a plan may draw on.
+ * invigilator is still imported, it is simply left out of the pool a plan may draw on. The
+ * faculty email addresses are kept beside them for the same reason: {@code edsa.core} plans
+ * examinations and has no use for a contact address, but the Accounts page does.
  */
 public record ImportedWorkbook(List<Student> students,
                                List<Faculty> faculty,
@@ -23,7 +25,8 @@ public record ImportedWorkbook(List<Student> students,
                                List<Exam> exams,
                                Map<String, List<String>> enrollments,
                                Map<String, Boolean> roomAvailability,
-                               Map<String, Boolean> facultyAvailability) {
+                               Map<String, Boolean> facultyAvailability,
+                               Map<String, String> facultyEmails) {
 
     public int enrollmentCount() {
         return enrollments.values().stream().mapToInt(List::size).sum();

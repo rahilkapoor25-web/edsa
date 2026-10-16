@@ -6,11 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import edsa.auth.AccountService;
 import edsa.auth.AppUser;
+import edsa.auth.UserRepository;
+
+import org.hamcrest.Matchers;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,12 +43,21 @@ class UserAdminTest {
     private PasswordEncoder encoder;
 
     @Autowired
+    private UserRepository users;
+
+    @Autowired
     private JdbcTemplate jdbc;
 
     @BeforeEach
     void startWithOneAdministrator() {
         jdbc.update("DELETE FROM app_user");
+        jdbc.update("DELETE FROM faculty");
         accounts.register("boss@thapar.edu", "administrator-pass", "The Administrator", "ADMIN");
+    }
+
+    private void importedFaculty(String id, String name, String email) {
+        jdbc.update("INSERT INTO faculty (id, name, email, department, available) "
+                + "VALUES (?, ?, ?, 'CSE', TRUE)", id, name, email);
     }
 
     @Test
@@ -117,5 +130,115 @@ class UserAdminTest {
                         .param("password", "short"))
                 .andExpect(redirectedUrl("/users"));
         assertTrue(accounts.find("fine@thapar.edu").isEmpty());
+    }
+
+    // ── Bulk creation from the imported faculty records ───────────────────────────────────
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void thePageListsTheImportedProfessorsAwaitingAnAccount() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+
+        mvc.perform(get("/users"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("Professors from the imported workbook")))
+                .andExpect(content().string(Matchers.containsString("Dr Ayaan Example")))
+                .andExpect(content().string(Matchers.containsString("Will be created")));
+
+        assertTrue(accounts.find("ayaan@example.edu").isEmpty(), "looking creates nothing");
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void anAdministratorCanCreateEveryMissingProfessorAccountAtOnce() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F02", "Dr Bela Example", "bela@example.edu");
+
+        mvc.perform(post("/users/professors").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("Accounts just created")))
+                .andExpect(content().string(Matchers.containsString("/activate?token=")));
+
+        AppUser created = accounts.find("ayaan@example.edu").orElseThrow();
+        assertEquals("PROFESSOR", created.role());
+        assertEquals("F01", created.facultyId());
+        assertFalse(created.active(), "it cannot be signed into until its owner sets a password");
+        assertTrue(accounts.find("bela@example.edu").isPresent());
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void theActivationLinkIsShownOnceAndNotAgainOnTheNextPageLoad() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        mvc.perform(post("/users/professors").with(csrf()))
+                .andExpect(content().string(Matchers.containsString("/activate?token=")));
+
+        mvc.perform(get("/users"))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("/activate?token="))));
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void runningBulkCreationTwiceCreatesNothingTheSecondTime() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        mvc.perform(post("/users/professors").with(csrf()));
+        String hashBefore = accounts.find("ayaan@example.edu").orElseThrow().passwordHash();
+
+        mvc.perform(post("/users/professors").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("already has an account")));
+
+        assertEquals(hashBefore, accounts.find("ayaan@example.edu").orElseThrow().passwordHash());
+        assertEquals(2, users.count(), "the administrator plus the one professor");
+    }
+
+    @Test
+    @WithMockUser(username = "professor@thapar.edu", roles = "PROFESSOR")
+    void aProfessorCannotCreateAccountsInBulk() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+
+        mvc.perform(post("/users/professors").with(csrf())).andExpect(status().isForbidden());
+
+        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+        assertEquals(1, users.count(), "only the administrator the test started with");
+    }
+
+    @Test
+    void aStrangerCannotCreateAccountsInBulk() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+
+        mvc.perform(post("/users/professors").with(csrf())).andExpect(status().is3xxRedirection());
+
+        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void bulkCreationNeedsACsrfToken() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+
+        mvc.perform(post("/users/professors")).andExpect(status().isForbidden());
+
+        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void aRecordThatCannotBeUsedIsExplainedOnThePage() throws Exception {
+        importedFaculty("F01", "Dr Ayaan Example", null);
+
+        mvc.perform(post("/users/professors").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("No email address")));
+
+        assertEquals(1, users.count(), "no account was invented for them");
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void thePageSaysSoWhenNoWorkbookHasBeenImported() throws Exception {
+        mvc.perform(get("/users"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("No faculty records have been imported")));
     }
 }

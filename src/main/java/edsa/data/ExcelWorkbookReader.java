@@ -1,6 +1,7 @@
 package edsa.data;
 
 import edsa.core.Exam;
+import edsa.core.ExamMode;
 import edsa.core.Faculty;
 import edsa.core.Room;
 import edsa.core.Student;
@@ -55,6 +56,10 @@ public final class ExcelWorkbookReader {
             ENROLLMENTS, List.of("Student ID", "Subject Code"),
             EXAMS, List.of("Exam ID", "Subject Code", "Date"));
 
+    /** Permissive but structural: a local part, an @, a dotted domain. */
+    private static final java.util.regex.Pattern EMAIL =
+            java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$");
+
     /** A guard against a small file that expands into an enormous one. */
     private static final double MAX_COMPRESSION_RATIO = 0.01;
 
@@ -82,7 +87,8 @@ public final class ExcelWorkbookReader {
             Map<String, Student> students = readStudents(workbook.getSheet(STUDENTS));
             List<Faculty> faculty = new ArrayList<>();
             Map<String, Boolean> facultyAvailable = new LinkedHashMap<>();
-            readFaculty(workbook.getSheet(FACULTY), faculty, facultyAvailable);
+            Map<String, String> facultyEmails = new LinkedHashMap<>();
+            readFaculty(workbook.getSheet(FACULTY), faculty, facultyAvailable, facultyEmails);
             List<Room> rooms = new ArrayList<>();
             Map<String, Boolean> roomAvailable = new LinkedHashMap<>();
             readRooms(workbook.getSheet(ROOMS), rooms, roomAvailable);
@@ -101,7 +107,8 @@ public final class ExcelWorkbookReader {
                     .toList();
 
             return java.util.Optional.of(new ImportedWorkbook(registered, List.copyOf(faculty), List.copyOf(rooms),
-                    List.copyOf(subjects.values()), exams, enrollments, roomAvailable, facultyAvailable));
+                    List.copyOf(subjects.values()), exams, enrollments, roomAvailable, facultyAvailable,
+                    Map.copyOf(facultyEmails)));
         } catch (IOException | RuntimeException e) {
             errors.add("The file could not be read as an .xlsx workbook: " + e.getMessage());
             return java.util.Optional.empty();
@@ -134,12 +141,14 @@ public final class ExcelWorkbookReader {
         return students;
     }
 
-    private void readFaculty(Sheet sheet, List<Faculty> faculty, Map<String, Boolean> availability) {
+    private void readFaculty(Sheet sheet, List<Faculty> faculty, Map<String, Boolean> availability,
+                             Map<String, String> emails) {
         Map<String, Integer> columns = headers(sheet);
         if (columns == null) {
             return;
         }
         Set<String> seen = new HashSet<>();
+        Map<String, String> emailOwners = new LinkedHashMap<>();
         for (Row row : dataRows(sheet)) {
             String id = required(sheet, row, columns, "Faculty ID");
             String name = required(sheet, row, columns, "Name");
@@ -151,9 +160,39 @@ public final class ExcelWorkbookReader {
                 error(sheet, row, "Faculty ID", "'" + id + "' appears more than once");
                 continue;
             }
+            String email = readEmail(sheet, row, columns, emailOwners, id);
             faculty.add(new Faculty(id, name, department, false, Set.of()));
             availability.put(id, readAvailability(sheet, row, columns, "Available"));
+            if (email != null) {
+                emails.put(id, email);
+            }
         }
+    }
+
+    /**
+     * The optional Email column, lower-cased.
+     *
+     * <p>Blank is allowed — a member with no address simply cannot be given an account — but a
+     * malformed or repeated address is reported with its row rather than stored, because an
+     * account would later be created from it.
+     */
+    private String readEmail(Sheet sheet, Row row, Map<String, Integer> columns,
+                             Map<String, String> emailOwners, String facultyId) {
+        String value = optional(row, columns, "Email");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String email = value.trim().toLowerCase();
+        if (!EMAIL.matcher(email).matches() || email.length() > 254) {
+            error(sheet, row, "Email", "'" + value.trim() + "' is not an email address");
+            return null;
+        }
+        String owner = emailOwners.putIfAbsent(email, facultyId);
+        if (owner != null) {
+            error(sheet, row, "Email", "'" + email + "' is already used by " + owner);
+            return null;
+        }
+        return email;
     }
 
     private void readRooms(Sheet sheet, List<Room> rooms, Map<String, Boolean> availability) {
@@ -283,6 +322,11 @@ public final class ExcelWorkbookReader {
                 }
                 if (duration <= 0) {
                     error(sheet, row, "Duration Minutes", "must be greater than zero, found " + duration);
+                    continue;
+                }
+                if (duration > ExamMode.MAX_OVERRIDE_MINUTES) {
+                    error(sheet, row, "Duration Minutes", "must be " + ExamMode.MAX_OVERRIDE_MINUTES
+                            + " or fewer, found " + duration);
                     continue;
                 }
             }

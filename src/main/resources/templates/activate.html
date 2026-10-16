@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Set your password', 'none', ~{:: main})}">
+<body>
+
+<main th:fragment="main" class="signin">
+    <div class="signin__card card">
+        <p class="label">Examination office</p>
+        <h1 class="signin__title">Set your password</h1>
+
+        <div th:if="${activated}">
+            <p class="notice">
+                Your password is set. You can now sign in as
+                <span class="mono" th:text="${activated}">name@thapar.edu</span>.
+            </p>
+            <a class="button button--full" th:href="@{/login}">Go to sign in</a>
+        </div>
+
+        <div th:unless="${activated}">
+            <p class="signin__lead" th:if="${usable}">
+                The examination office created an account for you. Choose a password and it is
+                yours — this link works once.
+            </p>
+
+            <p class="field__error" th:if="${error}" th:text="${error}">That link is not valid</p>
+
+            <div th:unless="${usable}">
+                <p class="signin__lead">
+                    This activation link is not valid, has expired, or has already been used. Ask
+                    the examination office to create a new one for you.
+                </p>
+                <a class="button button--full" th:href="@{/login}">Go to sign in</a>
+            </div>
+
+            <form method="post" th:action="@{/activate}" th:if="${usable}" novalidate>
+                <input type="hidden" name="token" th:value="${token}">
+
+                <div class="field">
+                    <label class="label" for="password">New password</label>
+                    <input class="input" type="password" id="password" name="password"
+                           autocomplete="new-password" placeholder="at least 8 characters" autofocus>
+                </div>
+
+                <div class="field">
+                    <label class="label" for="confirmation">Repeat it</label>
+                    <input class="input" type="password" id="confirmation" name="confirmation"
+                           autocomplete="new-password">
+                </div>
+
+                <button class="button button--full" type="submit">Set my password</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>
