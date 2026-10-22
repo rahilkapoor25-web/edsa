@@ -39,9 +39,93 @@
                                 th:text="${option.name} + ' (' + ${option.id} + ')'">Hall (R1)</option>
                     </select>
                 </div>
+                <div class="filter__search">
+                    <label class="label" for="professor">Invigilator</label>
+                    <input class="input" type="search" id="professor" name="professor"
+                           placeholder="Search professor by name..." th:value="${professor}"
+                           aria-describedby="professor-help">
+                    <p class="field__help" id="professor-help">
+                        Part of a name is enough. Capitals do not matter.
+                    </p>
+                </div>
                 <button class="button button--quiet" type="submit">Filter</button>
-                <a class="button button--quiet" th:href="@{/rooms}" th:if="${room != null and !room.isEmpty()}">Clear</a>
+                <a class="button button--quiet" th:href="@{/rooms}"
+                   th:if="${(room != null and !room.isEmpty()) or searched}">Clear</a>
             </form>
+
+            <!-- The invigilator search. Every room shown below comes from a real duty in the
+                 roster, never from the name that was typed. -->
+            <section class="panel" th:if="${searched}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Invigilator duties</h2>
+                    <span class="label">
+                        matching &ldquo;<span th:text="${professor}">aman</span>&rdquo;
+                    </span>
+                </div>
+
+                <div class="panel__body" th:if="${#lists.isEmpty(matches)}">
+                    <p class="muted">No matching professor or room assignments found.</p>
+                </div>
+
+                <div th:unless="${#lists.isEmpty(matches)}">
+                    <p class="muted panel__body"
+                       th:if="${#lists.size(matches) > 1}">
+                        <span class="mono" th:text="${#lists.size(matches)}">2</span> invigilators match
+                        that name. Check the id and department to tell them apart.
+                    </p>
+
+                    <div th:each="match : ${matches}">
+                        <div class="panel__head">
+                            <div>
+                                <h3 class="panel__title" th:text="${match.member().getName()}">Dr Name</h3>
+                                <p class="panel__note">
+                                    <span class="code" th:text="${match.member().getId()}">F01</span>
+                                    <span th:text="${match.member().getDepartment()}">CSE</span>
+                                    · <span class="mono" th:text="${match.dutyCount()}">2</span>
+                                    <span th:text="${match.dutyCount() == 1} ? 'duty' : 'duties'">duties</span>
+                                    <span th:if="${match.hasDuties()}">
+                                        · rooms <span class="mono" th:text="${match.roomSummary()}">R201</span>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="panel__body" th:unless="${match.hasDuties()}">
+                            <p class="muted">No duties in this session.</p>
+                        </div>
+
+                        <div class="table-wrap" th:if="${match.hasDuties()}">
+                            <table class="table">
+                                <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Paper</th>
+                                    <th>Title</th>
+                                    <th>Room</th>
+                                    <th>Building</th>
+                                    <th class="is-numeric">Students</th>
+                                    <th>Role</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="duty : ${match.duties()}">
+                                    <td class="mono" th:text="${duty.slot().getDate()}">2026-11-10</td>
+                                    <td class="mono"
+                                        th:text="${duty.slot().getStartTime()} + '–' + ${duty.slot().getEndTime()}">09:30–12:30</td>
+                                    <td><span class="code" th:text="${duty.slot().getPaperCode()}">CS301</span></td>
+                                    <td class="is-primary" th:text="${duty.slot().getPaperName()}">Data Structures</td>
+                                    <td><span class="code" th:text="${duty.room().getId()}">R201</span></td>
+                                    <td th:text="${duty.room().getBuilding()}">Block B</td>
+                                    <td class="is-numeric" th:text="${duty.seatedInRoom()}">24</td>
+                                    <td th:text="${duty.role()}">Invigilator</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <p class="muted" th:if="${#lists.isEmpty(sittings)}">Nothing is seated in that room.</p>
 

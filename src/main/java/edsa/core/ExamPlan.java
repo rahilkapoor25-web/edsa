@@ -123,6 +123,54 @@ public final class ExamPlan {
         return data.rooms().stream().filter(room -> used.contains(room.getId())).toList();
     }
 
+    /**
+     * The invigilators whose name contains the given text, each with every duty they hold.
+     *
+     * <p>Matching is deliberately forgiving — trimmed, case-insensitive, and on any part of
+     * the name — because somebody looking for their own room types "aman", not
+     * "Dr. Aman Verma". A blank search matches nobody rather than everybody, so clearing the
+     * box puts the page back as it was instead of dumping the whole roster.
+     *
+     * <p>Every room in the result comes from the duty roster. A professor's room is never
+     * guessed from their name or their department.
+     */
+    public List<DutySearchResult> invigilatorsNamed(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        String wanted = query.trim().toLowerCase();
+
+        return data.faculty().stream()
+                .filter(member -> member.getName() != null
+                        && member.getName().toLowerCase().contains(wanted))
+                .sorted(Comparator.comparing(Faculty::getName).thenComparing(Faculty::getId))
+                .map(member -> new DutySearchResult(member, dutiesOf(member)))
+                .toList();
+    }
+
+    /** Everything one invigilator is down for, earliest first. */
+    private List<FacultyDuty> dutiesOf(Faculty member) {
+        List<FacultyDuty> held = new ArrayList<>();
+        for (Assignment duty : duties.forFaculty(member.getId())) {
+            ExamSlot slot = slotsById.get(duty.slotId());
+            Room room = data.room(duty.roomId());
+            if (slot == null || room == null) {
+                continue;
+            }
+            held.add(new FacultyDuty(member, slot, room, seatedIn(duty.slotId(), duty.roomId())));
+        }
+        held.sort(Comparator.comparing((FacultyDuty held2) -> held2.slot().getDate())
+                .thenComparing(one -> one.slot().getStartTime())
+                .thenComparing(one -> one.room().getId()));
+        return List.copyOf(held);
+    }
+
+    private int seatedIn(String slotId, String roomId) {
+        return (int) seating.seatsFor(slotId).stream()
+                .filter(seat -> seat.roomId().equals(roomId))
+                .count();
+    }
+
     /** Every faculty member and the duties they drew, busiest first. */
     public List<Workload> workloads() {
         return data.faculty().stream()

@@ -24,17 +24,32 @@ public class RoomScheduleController {
         this.workspace = workspace;
     }
 
+    /**
+     * The seating plan, optionally narrowed to one room, and optionally searched for an
+     * invigilator by name.
+     *
+     * <p>The two filters are independent and both live in one form, so a submit keeps
+     * whichever of them is set. A plain GET form is deliberate: this application has no
+     * JavaScript at all, and a search box that works without any is simpler, accessible, and
+     * bookmarkable.
+     */
     @GetMapping("/rooms")
-    public String page(@RequestParam(required = false) String room, Model model) {
+    public String page(@RequestParam(required = false) String room,
+                       @RequestParam(required = false) String professor,
+                       Model model) {
         model.addAttribute("hasPlan", workspace.hasPlan());
         model.addAttribute("mode", workspace.mode());
+        model.addAttribute("room", room);
+        model.addAttribute("professor", professor);
+        model.addAttribute("searched", professor != null && !professor.isBlank());
+
         if (workspace.hasPlan()) {
             ExamPlan plan = workspace.result().plan();
             model.addAttribute("rooms", plan.roomsUsed());
-            model.addAttribute("room", room);
             var sittings = room == null || room.isBlank() ? plan.sittings() : plan.sittingsIn(room);
             model.addAttribute("sittings", sittings);
             model.addAttribute("seatedTotal", sittings.stream().mapToInt(s -> s.seated()).sum());
+            model.addAttribute("matches", plan.invigilatorsNamed(professor));
         }
         return "room-schedule";
     }

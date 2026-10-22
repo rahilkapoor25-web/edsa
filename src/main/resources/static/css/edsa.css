@@ -891,3 +891,15 @@ button.session__logout:hover {
         padding-right: 20px;
     }
 }
+
+/* The invigilator search sits beside the room filter, wide enough for a full name. */
+.filter__search {
+    min-width: 260px;
+    flex: 1 1 260px;
+}
+
+.field__help {
+    margin: 6px 0 0;
+    color: var(--ink-500);
+    font-size: 12px;
+}
