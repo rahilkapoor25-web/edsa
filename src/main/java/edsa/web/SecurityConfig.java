@@ -1,5 +1,6 @@
 package edsa.web;
 
+import edsa.auth.AccountStatusFilter;
 import edsa.auth.DatabaseUserDetailsService;
 import edsa.auth.LoginAttempts;
 
@@ -22,6 +23,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -122,9 +124,14 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager authenticationManager,
-                                           LoginAttempts attempts) throws Exception {
+                                           LoginAttempts attempts, AccountStatusFilter accountStatus)
+            throws Exception {
         http
                 .addFilterBefore(loginPauseFilter(attempts), UsernamePasswordAuthenticationFilter.class)
+                // After the session's authentication has been restored and before anything is
+                // authorised with it, so a disabled account is turned away rather than let
+                // through on what its session still remembers.
+                .addFilterBefore(accountStatus, AuthorizationFilter.class)
                 .authenticationManager(authenticationManager)
                 .authorizeHttpRequests(requests -> requests
                         // /activate is open by design: an account awaiting activation cannot

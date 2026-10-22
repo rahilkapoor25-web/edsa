@@ -25,10 +25,15 @@ public class LoginController {
     private static final String PAUSED =
             "Too many sign-in attempts. Wait a minute and try again.";
 
+    /** Shown when an account is switched off while its owner is signed in. */
+    private static final String SWITCHED_OFF =
+            "Your account has been switched off. Ask the examination office to switch it back on.";
+
     @GetMapping("/login")
     public String signInPage(@RequestParam(required = false) String error,
                              @RequestParam(required = false) String loggedOut,
                              @RequestParam(required = false) String throttled,
+                             @RequestParam(required = false) String disabled,
                              Model model) {
         if (error != null) {
             model.addAttribute("error", REFUSED);
@@ -38,6 +43,11 @@ public class LoginController {
         }
         if (loggedOut != null) {
             model.addAttribute("notice", "You have been signed out");
+        }
+        if (disabled != null) {
+            // Only ever reached by somebody whose own session was just ended, so naming the
+            // reason tells them nothing they do not already know about their own account.
+            model.addAttribute("notice", SWITCHED_OFF);
         }
         return "login";
     }
