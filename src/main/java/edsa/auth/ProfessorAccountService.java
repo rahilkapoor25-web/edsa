@@ -38,6 +38,20 @@ public class ProfessorAccountService {
     /** 256 bits of randomness: long enough that guessing is not a consideration. */
     private static final int TOKEN_BYTES = 32;
 
+    /**
+     * Domains reserved for documentation, which can never receive mail.
+     *
+     * <p>They arrive by the obvious route: the downloadable template fills its example rows
+     * with addresses like {@code f01@example.edu}, somebody replaces the names but not the
+     * addresses, and the import carries them through. Creating accounts for them would
+     * produce invitations nobody can ever be given, so a record like this is refused with a
+     * message saying to put the real institutional address in the workbook.
+     *
+     * <p>Reserved by RFC 2606 and IANA precisely so they cannot belong to anybody.
+     */
+    private static final Set<String> UNREACHABLE_DOMAINS =
+            Set.of("example.com", "example.org", "example.net", "example.edu", "example");
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserRepository users;
@@ -99,6 +113,12 @@ public class ProfessorAccountService {
         if (!AccountService.isWellFormed(email)) {
             return ProvisioningCandidate.unusable(id, name, email, department,
                     "'" + email + "' is not an email address");
+        }
+        if (isUnreachable(email)) {
+            return ProvisioningCandidate.unusable(id, name, email, department,
+                    "'" + email + "' is an example address, not a real mailbox. Put this "
+                            + "professor's institutional address in the Faculty worksheet and "
+                            + "import the workbook again.");
         }
         if (!emailsSeen.add(email)) {
             return ProvisioningCandidate.unusable(id, name, email, department,
@@ -221,6 +241,12 @@ public class ProfessorAccountService {
                     + pending.expiresAt().toLocalDate() + ". Ask the examination office for a new one.");
         }
         return pending;
+    }
+
+    /** Whether this address belongs to a domain reserved for documentation. */
+    private static boolean isUnreachable(String email) {
+        int at = email.lastIndexOf('@');
+        return at >= 0 && UNREACHABLE_DOMAINS.contains(email.substring(at + 1));
     }
 
     private static String randomSecret() {

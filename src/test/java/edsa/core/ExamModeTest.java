@@ -62,14 +62,14 @@ class ExamModeTest {
     }
 
     @Test
-    void aPaperMayOverrideTheModesDuration() {
+    void aPaperCannotOverrideTheModesDuration() {
         ExamData data = new ExamData(TestData.students("S", 4, "CS301"), TestData.rooms(1, 10),
                 TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0), 45)));
 
         ExamSlot slot = planner.plan(data, ExamMode.ENDSEM).plan().schedule().get(0);
 
-        assertEquals(45, slot.getDurationMinutes());
-        assertEquals(LocalTime.of(9, 45), slot.getEndTime());
+        assertEquals(180, slot.getDurationMinutes(), "an Endsem paper runs for three hours");
+        assertEquals(LocalTime.of(12, 0), slot.getEndTime());
     }
 
     @Test

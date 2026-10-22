@@ -11,14 +11,14 @@ public record ProvisioningCandidate(String facultyId, String name, String email,
 
     public enum Eligibility {
 
-        /** An account will be created for this one. */
-        ELIGIBLE("Will be created"),
+        /** An account will be created for this one, and an invitation link produced. */
+        ELIGIBLE("Ready to invite"),
 
-        /** Nothing to do: they already have an account. */
-        SKIPPED("Already has an account"),
+        /** Nothing to do: they already have an account, which is left exactly as it is. */
+        SKIPPED("Has an account"),
 
-        /** Cannot be used: no address, a malformed one, or one another account holds. */
-        UNUSABLE("Cannot be used");
+        /** No usable address: missing, malformed, an example domain, or already taken. */
+        UNUSABLE("Needs a real address");
 
         private final String label;
 
@@ -33,7 +33,7 @@ public record ProvisioningCandidate(String facultyId, String name, String email,
 
     public static ProvisioningCandidate eligible(String facultyId, String name, String email, String department) {
         return new ProvisioningCandidate(facultyId, name, email, department, Eligibility.ELIGIBLE,
-                "No account yet");
+                "Will be sent an invitation link");
     }
 
     public static ProvisioningCandidate skipped(String facultyId, String name, String email,

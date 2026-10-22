@@ -102,7 +102,7 @@
             <div class="panel__head">
                 <h2 class="panel__title">Professors from the imported workbook</h2>
                 <span class="label">
-                    <span class="mono" th:text="${eligibleCount}">0</span> without an account
+                    <span class="mono" th:text="${eligibleCount}">0</span> ready to invite
                 </span>
             </div>
             <div class="panel__body">
@@ -119,6 +119,11 @@
                         <span class="mono">PROFESSOR</span> role, and is created without a password:
                         its owner sets their own through a single-use link that expires. Nobody who
                         already has an account is touched.
+                    </p>
+                    <p class="notice">
+                        <strong>EDSA does not send email.</strong> It has no mail server configured,
+                        so nothing is delivered to anybody. Creating the accounts shows you one link
+                        per professor, once, and handing those links out is yours to do.
                     </p>
 
                     <div class="table-wrap">
@@ -187,9 +192,12 @@
 
                 <div th:unless="${#lists.isEmpty(summary.created())}">
                     <p class="notice">
-                        Give each professor their own link. They are shown once and are not stored
-                        anywhere in readable form, so copy them now. Each link works once and expires;
-                        the account cannot be signed into until its owner has set a password through it.
+                        <strong>No email has been sent.</strong> Copy each link below and give it to
+                        that professor yourself. They are shown once and are not stored anywhere in
+                        readable form, so if you leave this page they cannot be shown again — the
+                        only way back is to disable the account and create it afresh. Each link works
+                        once and expires, and the account cannot be signed into until its owner has
+                        set their own password through it.
                     </p>
                     <div class="table-wrap">
                         <table class="table">
@@ -197,7 +205,7 @@
                             <tr>
                                 <th>Faculty</th>
                                 <th>Email</th>
-                                <th>One-time activation link</th>
+                                <th>Invitation link to pass on</th>
                             </tr>
                             </thead>
                             <tbody>

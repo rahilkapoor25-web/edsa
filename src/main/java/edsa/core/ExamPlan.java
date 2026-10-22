@@ -63,6 +63,22 @@ public final class ExamPlan {
         return sittings(roomId -> true);
     }
 
+    /**
+     * One room's sitting for one paper, when the plan has it.
+     *
+     * <p>This is what the room detail page asks for: a single exam in a single room, rather
+     * than everything happening in that room across the session.
+     */
+    public java.util.Optional<RoomSitting> sitting(String slotId, String roomId) {
+        if (slotId == null || roomId == null) {
+            return java.util.Optional.empty();
+        }
+        return sittings().stream()
+                .filter(sitting -> sitting.slot().getId().equals(slotId)
+                        && sitting.room().getId().equals(roomId))
+                .findFirst();
+    }
+
     /** The same, narrowed to one room. */
     public List<RoomSitting> sittingsIn(String roomId) {
         return sittings(roomId::equals);

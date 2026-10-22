@@ -86,15 +86,37 @@ class DurationPipelineTest {
     }
 
     @Test
-    void theSameValueIsHonouredForMidsemAndEndsem() {
+    void theSameValueIsIgnoredForMidsemAndEndsemToo() {
         importOf(withExamRows(List.of(
                 List.of("E1", "CS301", "2026-11-10", "09:00", ""),
                 List.of("E2", "EC301", "2026-11-10", "09:00", "90"))));
         ExamData data = repository.load();
 
-        assertEquals(List.of(120, 90), durationsByExamId(new ExamPlanner().plan(data, ExamMode.MIDSEM).plan()));
-        assertEquals(List.of(180, 90), durationsByExamId(new ExamPlanner().plan(data, ExamMode.ENDSEM).plan()));
+        // Whichever mode is chosen, both papers run for that mode's length.
+        assertEquals(List.of(120, 120), durationsByExamId(new ExamPlanner().plan(data, ExamMode.MIDSEM).plan()));
+        assertEquals(List.of(180, 180), durationsByExamId(new ExamPlanner().plan(data, ExamMode.ENDSEM).plan()));
         assertEquals(List.of(10, 10), durationsByExamId(new ExamPlanner().plan(data, ExamMode.QUIZ).plan()));
+    }
+
+    /**
+     * The reported bug end to end: an Exams worksheet where one paper carries 90, imported
+     * and planned as an Endsem session. It used to come out at 09:00-10:30 in a timetable
+     * headed "3 h".
+     */
+    @Test
+    void aNinetyMinuteValueDoesNotShortenAnEndsemPaper() {
+        importOf(withExamRows(List.of(
+                List.of("E1", "CS301", "2026-11-10", "09:00", ""),
+                List.of("E2", "EC301", "2026-11-10", "09:00", "90"))));
+
+        PlanningResult result = new ExamPlanner().plan(repository.load(), ExamMode.ENDSEM);
+
+        assertTrue(result.isUsable(), String.valueOf(result.problems()));
+        for (ExamSlot slot : result.plan().schedule()) {
+            assertEquals(180, slot.getDurationMinutes(), slot.getPaperCode());
+            assertEquals("3 h", slot.getDurationLabel(), slot.getPaperCode());
+            assertEquals(java.time.LocalTime.of(12, 0), slot.getEndTime(), slot.getPaperCode());
+        }
     }
 
     @Test
@@ -108,8 +130,9 @@ class DurationPipelineTest {
         assertEquals(90, data.exam("E1").getDurationOverrideMinutes().orElseThrow());
         assertTrue(data.exam("E2").getDurationOverrideMinutes().isEmpty());
         assertEquals(1, data.ignoredDurationOverrides(ExamMode.QUIZ).size(),
-                "the stored value is reported as ignored under Quiz, not applied");
-        assertTrue(data.ignoredDurationOverrides(ExamMode.ENDSEM).isEmpty());
+                "the stored value is reported as ignored, not applied");
+        assertEquals(1, data.ignoredDurationOverrides(ExamMode.ENDSEM).size(),
+                "and the same under Endsem, which no longer accepts one either");
     }
 
     @Test

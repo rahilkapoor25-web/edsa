@@ -55,9 +55,9 @@ class ProfessorAccountTest {
     }
 
     private void threeProfessors() {
-        faculty("F01", "Dr Ayaan Example", "ayaan@example.edu", "CSE");
-        faculty("F02", "Dr Bela Example", "bela@example.edu", "ECE");
-        faculty("F03", "Dr Chandra Example", "chandra@example.edu", "ME");
+        faculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu", "CSE");
+        faculty("F02", "Dr Bela Example", "bela@thapar.edu", "ECE");
+        faculty("F03", "Dr Chandra Example", "chandra@thapar.edu", "ME");
     }
 
     private Optional<ProvisioningCandidate> candidate(String facultyId) {
@@ -86,11 +86,11 @@ class ProfessorAccountTest {
         professors.createMissingAccounts();
 
         AppUser ayaan = users.findByFacultyId("F01").orElseThrow();
-        assertEquals("ayaan@example.edu", ayaan.email());
+        assertEquals("ayaan@thapar.edu", ayaan.email());
         assertEquals("Dr Ayaan Example", ayaan.displayName());
         assertEquals("F01", ayaan.facultyId());
         assertTrue(ayaan.isLinkedToFaculty());
-        assertEquals("F02", users.findByEmail("bela@example.edu").orElseThrow().facultyId());
+        assertEquals("F02", users.findByEmail("bela@thapar.edu").orElseThrow().facultyId());
     }
 
     @Test
@@ -138,12 +138,12 @@ class ProfessorAccountTest {
     @Test
     void anAccountCreatedByHandForTheSameAddressIsSkipped() {
         threeProfessors();
-        accounts.register("bela@example.edu", "a-chosen-password", "Dr Bela Example", "ADMIN");
+        accounts.register("bela@thapar.edu", "a-chosen-password", "Dr Bela Example", "ADMIN");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
         assertEquals(2, summary.createdCount());
-        assertEquals("ADMIN", users.findByEmail("bela@example.edu").orElseThrow().role(),
+        assertEquals("ADMIN", users.findByEmail("bela@thapar.edu").orElseThrow().role(),
                 "their existing role is not downgraded");
         assertEquals(ProvisioningCandidate.Eligibility.SKIPPED,
                 candidate("F02").orElseThrow().eligibility());
@@ -154,7 +154,7 @@ class ProfessorAccountTest {
     @Test
     void aProfessorWithNoEmailIsReportedRatherThanInvented() {
         faculty("F01", "Dr Ayaan Example", null, "CSE");
-        faculty("F02", "Dr Bela Example", "bela@example.edu", "ECE");
+        faculty("F02", "Dr Bela Example", "bela@thapar.edu", "ECE");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
@@ -180,8 +180,8 @@ class ProfessorAccountTest {
 
     @Test
     void twoFacultyRecordsSharingOneAddressGiveOneAccountAndOneReport() {
-        faculty("F01", "Dr Ayaan Example", "shared@example.edu", "CSE");
-        faculty("F02", "Dr Bela Example", "shared@example.edu", "ECE");
+        faculty("F01", "Dr Ayaan Example", "shared@thapar.edu", "CSE");
+        faculty("F02", "Dr Bela Example", "shared@thapar.edu", "ECE");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
@@ -195,7 +195,7 @@ class ProfessorAccountTest {
     @Test
     void aFacultyRecordWithNoNameIsReported() {
         jdbc.update("INSERT INTO faculty (id, name, email, department, available) "
-                + "VALUES ('F01', '', 'ayaan@example.edu', 'CSE', TRUE)");
+                + "VALUES ('F01', '', 'ayaan@thapar.edu', 'CSE', TRUE)");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
@@ -206,11 +206,11 @@ class ProfessorAccountTest {
 
     @Test
     void aMixedWorksheetIsReportedRecordByRecord() {
-        faculty("F01", "Dr Ayaan Example", "ayaan@example.edu", "CSE");
+        faculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu", "CSE");
         faculty("F02", "Dr Bela Example", null, "ECE");
         faculty("F03", "Dr Chandra Example", "bad address", "ME");
-        faculty("F04", "Dr Dilip Example", "dilip@example.edu", "CSE");
-        accounts.register("dilip@example.edu", "a-chosen-password", "Dr Dilip Example", "PROFESSOR");
+        faculty("F04", "Dr Dilip Example", "dilip@thapar.edu", "CSE");
+        accounts.register("dilip@thapar.edu", "a-chosen-password", "Dr Dilip Example", "PROFESSOR");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
@@ -239,7 +239,7 @@ class ProfessorAccountTest {
         professors.createMissingAccounts();
 
         String hash = users.findByFacultyId("F01").orElseThrow().passwordHash();
-        for (String guess : List.of("F01", "ayaan@example.edu", "ayaan", "Dr Ayaan Example",
+        for (String guess : List.of("F01", "ayaan@thapar.edu", "ayaan", "Dr Ayaan Example",
                 "ayaan123", "password", "F01F01F01")) {
             assertFalse(encoder.matches(guess, hash), "the stored hash must not match " + guess);
         }
@@ -265,7 +265,7 @@ class ProfessorAccountTest {
 
         String activated = professors.activate(tokenOf(summary, "F01"), "a-chosen-password");
 
-        assertEquals("ayaan@example.edu", activated);
+        assertEquals("ayaan@thapar.edu", activated);
         AppUser user = users.findByFacultyId("F01").orElseThrow();
         assertTrue(user.active());
         assertEquals("PROFESSOR", user.role());
@@ -375,12 +375,12 @@ class ProfessorAccountTest {
      */
     @Test
     void aFailurePartWayThroughLeavesNoHalfCreatedBatch() {
-        faculty("F01", "Dr Ayaan Example", "ayaan@example.edu", "CSE");
-        faculty("F02", "Dr Bela Example", "bela@example.edu", "ECE");
+        faculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu", "CSE");
+        faculty("F02", "Dr Bela Example", "bela@thapar.edu", "ECE");
         // An account that claims F02's address but not its faculty id, inserted behind the
         // service's back so the preview cannot see the clash coming.
         jdbc.update("INSERT INTO app_user (email, password_hash, display_name, role, active, faculty_id) "
-                + "VALUES ('later@example.edu', 'x', 'Later', 'PROFESSOR', TRUE, 'F02')");
+                + "VALUES ('later@thapar.edu', 'x', 'Later', 'PROFESSOR', TRUE, 'F02')");
 
         ProvisioningSummary summary = professors.createMissingAccounts();
 
@@ -396,5 +396,71 @@ class ProfessorAccountTest {
                 .map(ProvisionedAccount::activationToken)
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("no account was created for " + facultyId));
+    }
+
+    // ── Addresses that could never receive an invitation ─────────────────────────────────
+
+    /**
+     * The template seeds its example rows with addresses like {@code f01@example.edu}, and
+     * they get imported when somebody replaces the names but not the addresses. Creating
+     * accounts for them would hand out invitations nobody can ever be given.
+     */
+    @Test
+    void anExampleDomainAddressIsRefusedWithSomethingToDoAboutIt() {
+        faculty("F01", "Dr Ayaan Example", "f01@example.edu", "CSE");
+
+        ProvisioningSummary summary = professors.createMissingAccounts();
+
+        assertEquals(0, summary.createdCount(), "an address nobody can receive mail at is no use");
+        assertEquals(1, summary.unusableCount());
+        String reason = summary.unusable().get(0).reason();
+        assertTrue(reason.contains("example address"), reason);
+        assertTrue(reason.contains("Faculty worksheet"), "it should say how to fix it: " + reason);
+        assertEquals(0, users.count());
+    }
+
+    @Test
+    void everyReservedDocumentationDomainIsRefused() {
+        faculty("F01", "One", "a@example.com", "CSE");
+        faculty("F02", "Two", "b@example.org", "CSE");
+        faculty("F03", "Three", "c@example.net", "CSE");
+        faculty("F04", "Four", "d@example.edu", "CSE");
+
+        ProvisioningSummary summary = professors.createMissingAccounts();
+
+        assertEquals(0, summary.createdCount());
+        assertEquals(4, summary.unusableCount());
+    }
+
+    @Test
+    void arealInstitutionalAddressIsStillAccepted() {
+        faculty("F01", "Dr Ayaan Sharma", "ayaan.sharma@thapar.edu", "CSE");
+        faculty("F02", "Dr Myra Sharma", "myra.sharma@thapar.edu", "ECE");
+
+        ProvisioningSummary summary = professors.createMissingAccounts();
+
+        assertEquals(2, summary.createdCount(), String.valueOf(summary.unusable()));
+        assertEquals("ayaan.sharma@thapar.edu", users.findByFacultyId("F01").orElseThrow().email());
+    }
+
+    @Test
+    void anAddressThatMerelyContainsTheWordExampleIsFine() {
+        faculty("F01", "Dr Example Person", "example.person@thapar.edu", "CSE");
+
+        ProvisioningSummary summary = professors.createMissingAccounts();
+
+        assertEquals(1, summary.createdCount(),
+                "only the reserved domains are refused, not any address mentioning the word");
+    }
+
+    @Test
+    void theLabelsSayWhatWillHappenRatherThanBeingVague() {
+        faculty("F01", "Dr Real", "real@thapar.edu", "CSE");
+        faculty("F02", "Dr Placeholder", "f02@example.edu", "CSE");
+
+        var preview = professors.preview();
+
+        assertEquals("Ready to invite", preview.get(0).eligibility().label());
+        assertEquals("Needs a real address", preview.get(1).eligibility().label());
     }
 }

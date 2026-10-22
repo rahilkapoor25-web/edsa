@@ -1,6 +1,7 @@
 package edsa.web;
 
 import edsa.core.ExamPlan;
+import edsa.core.RoomSitting;
 import edsa.data.PlanWorkbook;
 import edsa.data.SeatingPlanCsv;
 
@@ -25,32 +26,53 @@ public class RoomScheduleController {
     }
 
     /**
-     * The seating plan, optionally narrowed to one room, and optionally searched for an
-     * invigilator by name.
+     * One page, three things it can be showing.
      *
-     * <p>The two filters are independent and both live in one form, so a submit keeps
-     * whichever of them is set. A plain GET form is deliberate: this application has no
-     * JavaScript at all, and a search box that works without any is simpler, accessible, and
-     * bookmarkable.
+     * <ul>
+     *   <li>A room detail — one paper in one room, with its seating grid — when a duty has
+     *       been opened. This is the only view that shows seats.
+     *   <li>An invigilator's duties, when a name has been searched. Just theirs: the whole
+     *       institution's sittings underneath would bury the answer they came for.
+     *   <li>Otherwise the sittings for the session, optionally narrowed to one room.
+     * </ul>
      */
     @GetMapping("/rooms")
     public String page(@RequestParam(required = false) String room,
                        @RequestParam(required = false) String professor,
+                       @RequestParam(required = false) String slot,
                        Model model) {
+        boolean searched = professor != null && !professor.isBlank();
         model.addAttribute("hasPlan", workspace.hasPlan());
         model.addAttribute("mode", workspace.mode());
         model.addAttribute("room", room);
         model.addAttribute("professor", professor);
-        model.addAttribute("searched", professor != null && !professor.isBlank());
+        model.addAttribute("searched", searched);
 
-        if (workspace.hasPlan()) {
-            ExamPlan plan = workspace.result().plan();
-            model.addAttribute("rooms", plan.roomsUsed());
-            var sittings = room == null || room.isBlank() ? plan.sittings() : plan.sittingsIn(room);
-            model.addAttribute("sittings", sittings);
-            model.addAttribute("seatedTotal", sittings.stream().mapToInt(s -> s.seated()).sum());
-            model.addAttribute("matches", plan.invigilatorsNamed(professor));
+        if (!workspace.hasPlan()) {
+            return "room-schedule";
         }
+
+        ExamPlan plan = workspace.result().plan();
+        model.addAttribute("rooms", plan.roomsUsed());
+
+        RoomSitting focus = plan.sitting(slot, room).orElse(null);
+        model.addAttribute("focus", focus);
+        if (focus != null) {
+            model.addAttribute("grid", focus.grid());
+            return "room-schedule";
+        }
+        // A link was followed to a pairing the plan does not hold — most likely the session
+        // was recomputed underneath it. Say so, rather than quietly showing something else.
+        model.addAttribute("missingSitting", slot != null && !slot.isBlank());
+
+        if (searched) {
+            model.addAttribute("matches", plan.invigilatorsNamed(professor));
+            return "room-schedule";
+        }
+
+        var sittings = room == null || room.isBlank() ? plan.sittings() : plan.sittingsIn(room);
+        model.addAttribute("sittings", sittings);
+        model.addAttribute("seatedTotal", sittings.stream().mapToInt(RoomSitting::seated).sum());
         return "room-schedule";
     }
 

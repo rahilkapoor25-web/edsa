@@ -157,8 +157,9 @@ class ExamDurationTest {
             assertEquals(LocalTime.of(9, 10), slot.getEndTime());
         });
         List<ExamSlot> midsem = schedule(data, ExamMode.MIDSEM);
-        assertEquals(List.of(90, 120), midsem.stream().sorted(java.util.Comparator.comparing(ExamSlot::getId))
-                .map(ExamSlot::getDurationMinutes).toList());
+        assertEquals(List.of(120, 120), midsem.stream().sorted(java.util.Comparator.comparing(ExamSlot::getId))
+                .map(ExamSlot::getDurationMinutes).toList(),
+                "both papers take the mode's length, declared value or not");
         assertEquals(10, schedule(data, ExamMode.QUIZ).get(0).getDurationMinutes(),
                 "going back to Quiz must re-time it, not keep the Midsem length");
     }
@@ -166,12 +167,13 @@ class ExamDurationTest {
     // ── Overrides the longer modes do accept ──────────────────────────────────────────────
 
     @Test
-    void midsemAndEndsemStillHonourADeclaredLength() {
+    void midsemAndEndsemIgnoreADeclaredLengthToo() {
         ExamData data = data(List.of(paper("E1", "CS301", 90)));
 
-        assertEquals(90, schedule(data, ExamMode.MIDSEM).get(0).getDurationMinutes());
-        assertEquals(90, schedule(data, ExamMode.ENDSEM).get(0).getDurationMinutes());
-        assertEquals(LocalTime.of(10, 30), schedule(data, ExamMode.ENDSEM).get(0).getEndTime());
+        assertEquals(120, schedule(data, ExamMode.MIDSEM).get(0).getDurationMinutes());
+        assertEquals(180, schedule(data, ExamMode.ENDSEM).get(0).getDurationMinutes());
+        assertEquals(LocalTime.of(12, 0), schedule(data, ExamMode.ENDSEM).get(0).getEndTime(),
+                "a ninety-minute value in the workbook must not shorten an Endsem paper");
     }
 
     @Test
@@ -182,17 +184,49 @@ class ExamDurationTest {
         assertEquals(180, slots.get(0).getDurationMinutes());
     }
 
+    /**
+     * The reported bug, exactly as it appeared: a timetable headed "Endsem · 3 h" with
+     * Database Systems sitting in it at 09:00-10:30 because the workbook carried 90 for that
+     * one paper. Every paper in an Endsem session runs the full three hours.
+     */
     @Test
-    void theModeReportsWhetherItAcceptsADeclaredLength() {
-        assertFalse(ExamMode.QUIZ.allowsDurationOverride());
-        assertTrue(ExamMode.MIDSEM.allowsDurationOverride());
-        assertTrue(ExamMode.ENDSEM.allowsDurationOverride());
+    void everyEndsemPaperRunsForThreeHoursWhicheverCarriesADeclaredLength() {
+        List<Exam> exams = List.of(
+                paper("E1", "CS301", null),
+                paper("E2", "CS302", null),
+                paper("E3", "CS303", 90));
 
-        assertEquals(10, ExamMode.QUIZ.minutesFor(90));
-        assertEquals(10, ExamMode.QUIZ.minutesFor(null));
-        assertEquals(90, ExamMode.MIDSEM.minutesFor(90));
-        assertEquals(120, ExamMode.MIDSEM.minutesFor(null));
-        assertEquals(120, ExamMode.MIDSEM.minutesFor(0), "a nonsense length is not a preference");
+        List<ExamSlot> slots = schedule(data(exams), ExamMode.ENDSEM);
+
+        assertEquals(3, slots.size());
+        for (ExamSlot slot : slots) {
+            assertEquals(180, slot.getDurationMinutes(), slot.getPaperCode() + " must run three hours");
+            assertEquals("3 h", slot.getDurationLabel(), slot.getPaperCode());
+            assertEquals(LocalTime.of(9, 0), slot.getStartTime());
+            assertEquals(LocalTime.of(12, 0), slot.getEndTime(), slot.getPaperCode());
+        }
+    }
+
+    @Test
+    void theThreeModesKeepTheirOwnDistinctLengths() {
+        ExamData data = data(List.of(paper("E1", "CS301", 90)));
+
+        assertEquals(10, schedule(data, ExamMode.QUIZ).get(0).getDurationMinutes());
+        assertEquals(120, schedule(data, ExamMode.MIDSEM).get(0).getDurationMinutes());
+        assertEquals(180, schedule(data, ExamMode.ENDSEM).get(0).getDurationMinutes());
+    }
+
+    @Test
+    void noModeAcceptsADeclaredLength() {
+        assertFalse(ExamMode.QUIZ.allowsDurationOverride());
+        assertFalse(ExamMode.MIDSEM.allowsDurationOverride());
+        assertFalse(ExamMode.ENDSEM.allowsDurationOverride());
+
+        for (ExamMode mode : ExamMode.values()) {
+            assertEquals(mode.defaultMinutes(), mode.minutesFor(90), mode + " with a declared 90");
+            assertEquals(mode.defaultMinutes(), mode.minutesFor(null), mode + " with nothing declared");
+            assertEquals(mode.defaultMinutes(), mode.minutesFor(0), mode + " with a nonsense length");
+        }
     }
 
     @Test
@@ -205,8 +239,11 @@ class ExamDurationTest {
         assertTrue(ignored.get(0).contains("CS301"), ignored.get(0));
         assertTrue(ignored.get(0).contains("90 minutes"), ignored.get(0));
         assertTrue(ignored.get(0).contains("10 minutes"), ignored.get(0));
-        assertTrue(data.ignoredDurationOverrides(ExamMode.MIDSEM).isEmpty(),
-                "Midsem accepts the declared length, so there is nothing to report");
+
+        // Every mode now reports it, because no mode acts on it.
+        assertEquals(1, data.ignoredDurationOverrides(ExamMode.MIDSEM).size());
+        assertEquals(1, data.ignoredDurationOverrides(ExamMode.ENDSEM).size());
+        assertTrue(data.ignoredDurationOverrides(ExamMode.ENDSEM).get(0).contains("180 minutes"));
     }
 
     // ── The independent check ─────────────────────────────────────────────────────────────

@@ -27,9 +27,105 @@
             <a class="button" th:href="@{/}">Go to Data and Run</a>
         </section>
 
-        <div th:if="${hasPlan}">
+        <!-- ── One room, one paper: the seating itself ───────────────────────────────── -->
+        <div th:if="${hasPlan and focus != null}">
+            <nav class="crumbs">
+                <a th:href="@{/rooms(professor=${professor})}"
+                   th:text="${searched} ? '← Back to duties for “' + ${professor} + '”' : '← Back to all sittings'">← Back</a>
+            </nav>
+
+            <section class="panel room-detail">
+                <div class="panel__head">
+                    <div>
+                        <h2 class="panel__title">
+                            <span class="code" th:text="${focus.slot().getPaperCode()}">CS301</span>
+                            <span th:text="${focus.slot().getPaperName()}">Data Structures</span>
+                        </h2>
+                        <p class="panel__note">
+                            <span class="mono" th:text="${focus.slot().getDate()}">2026-11-16</span>
+                            <span class="mono"
+                                  th:text="${focus.slot().getStartTime()} + '–' + ${focus.slot().getEndTime()}">09:00–12:00</span>
+                            · <span th:text="${focus.slot().getDurationLabel()}">3 h</span>
+                        </p>
+                    </div>
+                </div>
+
+                <dl class="figures room-detail__facts">
+                    <div class="figure">
+                        <dt class="label">Room</dt>
+                        <dd class="figure__value"><span class="code" th:text="${focus.room().getId()}">LH-01</span></dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Building</dt>
+                        <dd class="figure__value" th:text="${focus.room().getBuilding()}">Block A</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Seated</dt>
+                        <dd class="figure__value mono">
+                            <span th:text="${grid.seated()}">30</span> / <span th:text="${grid.capacity()}">30</span>
+                        </dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Invigilator</dt>
+                        <dd class="figure__value" th:text="${focus.invigilatorNames()}">Dr Name (F01)</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Seating</h2>
+                    <span class="label">
+                        <span class="mono" th:text="${grid.rowCount()}">5</span> rows ·
+                        <span class="mono" th:text="${grid.columnCount()}">6</span> per row ·
+                        <span class="mono" th:text="${grid.free()}">0</span> free
+                    </span>
+                </div>
+                <div class="table-wrap">
+                    <table class="seatgrid">
+                        <thead>
+                        <tr>
+                            <th scope="col"><span class="visually-hidden">Row</span></th>
+                            <th scope="col" th:each="cell : ${grid.rows()[0]}"
+                                th:text="'Seat ' + ${cell.column()}">Seat 1</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${grid.rows()}">
+                            <th scope="row" class="seatgrid__rowhead"
+                                th:text="'Row ' + ${row[0].row()}">Row 1</th>
+                            <td th:each="cell : ${row}" class="seatgrid__seat"
+                                th:classappend="${cell.isTaken()} ? '' : (${cell.isFree()} ? 'is-free' : 'is-nonseat')">
+                                <span th:if="${cell.isTaken()}">
+                                    <span class="seatgrid__id mono" th:text="${cell.student().getId()}">S001</span>
+                                    <span class="seatgrid__name" th:text="${cell.student().getName()}">Aarav Sharma</span>
+                                    <span class="seatgrid__pos mono" th:text="${cell.position()}">1-1</span>
+                                </span>
+                                <span class="seatgrid__empty" th:if="${cell.isFree()}" aria-label="Free seat">—</span>
+                                <span class="seatgrid__empty" th:unless="${cell.isTaken() or cell.isFree()}"
+                                      aria-label="Not a seat">×</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="panel__footnote">
+                    <span class="mono">—</span> free seat ·
+                    <span class="mono">×</span> a grid position this room does not seat ·
+                    seats numbered row&#8209;seat
+                </p>
+            </section>
+        </div>
+
+        <!-- ── A searched invigilator: only their duties ─────────────────────────────── -->
+        <div th:if="${hasPlan and focus == null}">
+            <p class="notice notice--error" th:if="${missingSitting}">
+                That exam is not sat in that room in the current plan. It may have been
+                recomputed since the link was made.
+            </p>
+
             <form class="filter" method="get" th:action="@{/rooms}">
-                <div>
+                <div class="filter__field">
                     <label class="label" for="room">Room</label>
                     <select class="input select" id="room" name="room">
                         <option value="" th:selected="${room == null or room.isEmpty()}">All rooms</option>
@@ -39,28 +135,24 @@
                                 th:text="${option.name} + ' (' + ${option.id} + ')'">Hall (R1)</option>
                     </select>
                 </div>
-                <div class="filter__search">
+                <div class="filter__field filter__field--grow">
                     <label class="label" for="professor">Invigilator</label>
                     <input class="input" type="search" id="professor" name="professor"
                            placeholder="Search professor by name..." th:value="${professor}"
                            aria-describedby="professor-help">
-                    <p class="field__help" id="professor-help">
-                        Part of a name is enough. Capitals do not matter.
-                    </p>
+                    <p class="field__help" id="professor-help">Part of a name is enough.</p>
                 </div>
-                <button class="button button--quiet" type="submit">Filter</button>
-                <a class="button button--quiet" th:href="@{/rooms}"
-                   th:if="${(room != null and !room.isEmpty()) or searched}">Clear</a>
+                <div class="filter__actions">
+                    <button class="button" type="submit">Filter</button>
+                    <a class="button button--quiet" th:href="@{/rooms}"
+                       th:if="${(room != null and !room.isEmpty()) or searched}">Clear</a>
+                </div>
             </form>
 
-            <!-- The invigilator search. Every room shown below comes from a real duty in the
-                 roster, never from the name that was typed. -->
             <section class="panel" th:if="${searched}">
                 <div class="panel__head">
                     <h2 class="panel__title">Invigilator duties</h2>
-                    <span class="label">
-                        matching &ldquo;<span th:text="${professor}">aman</span>&rdquo;
-                    </span>
+                    <span class="label">matching &ldquo;<span th:text="${professor}">aman</span>&rdquo;</span>
                 </div>
 
                 <div class="panel__body" th:if="${#lists.isEmpty(matches)}">
@@ -68,26 +160,20 @@
                 </div>
 
                 <div th:unless="${#lists.isEmpty(matches)}">
-                    <p class="muted panel__body"
-                       th:if="${#lists.size(matches) > 1}">
+                    <p class="muted panel__body" th:if="${#lists.size(matches) > 1}">
                         <span class="mono" th:text="${#lists.size(matches)}">2</span> invigilators match
                         that name. Check the id and department to tell them apart.
                     </p>
 
-                    <div th:each="match : ${matches}">
-                        <div class="panel__head">
-                            <div>
-                                <h3 class="panel__title" th:text="${match.member().getName()}">Dr Name</h3>
-                                <p class="panel__note">
-                                    <span class="code" th:text="${match.member().getId()}">F01</span>
-                                    <span th:text="${match.member().getDepartment()}">CSE</span>
-                                    · <span class="mono" th:text="${match.dutyCount()}">2</span>
-                                    <span th:text="${match.dutyCount() == 1} ? 'duty' : 'duties'">duties</span>
-                                    <span th:if="${match.hasDuties()}">
-                                        · rooms <span class="mono" th:text="${match.roomSummary()}">R201</span>
-                                    </span>
-                                </p>
-                            </div>
+                    <div class="match" th:each="match : ${matches}">
+                        <div class="match__head">
+                            <h3 class="match__name" th:text="${match.member().getName()}">Dr Name</h3>
+                            <p class="match__meta">
+                                <span class="code" th:text="${match.member().getId()}">F01</span>
+                                <span th:text="${match.member().getDepartment()}">CSE</span>
+                                · <span class="mono" th:text="${match.dutyCount()}">2</span>
+                                <span th:text="${match.dutyCount() == 1} ? 'duty' : 'duties'">duties</span>
+                            </p>
                         </div>
 
                         <div class="panel__body" th:unless="${match.hasDuties()}">
@@ -95,30 +181,35 @@
                         </div>
 
                         <div class="table-wrap" th:if="${match.hasDuties()}">
-                            <table class="table">
+                            <table class="table table--linked">
                                 <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Paper</th>
-                                    <th>Title</th>
-                                    <th>Room</th>
-                                    <th>Building</th>
-                                    <th class="is-numeric">Students</th>
-                                    <th>Role</th>
+                                    <th scope="col">Date</th>
+                                    <th scope="col">Time</th>
+                                    <th scope="col">Paper</th>
+                                    <th scope="col">Title</th>
+                                    <th scope="col">Room</th>
+                                    <th scope="col">Building</th>
+                                    <th scope="col" class="is-numeric">Students</th>
+                                    <th scope="col"></th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 <tr th:each="duty : ${match.duties()}">
-                                    <td class="mono" th:text="${duty.slot().getDate()}">2026-11-10</td>
+                                    <td class="mono" th:text="${duty.slot().getDate()}">2026-11-16</td>
                                     <td class="mono"
-                                        th:text="${duty.slot().getStartTime()} + '–' + ${duty.slot().getEndTime()}">09:30–12:30</td>
+                                        th:text="${duty.slot().getStartTime()} + '–' + ${duty.slot().getEndTime()}">09:00–12:00</td>
                                     <td><span class="code" th:text="${duty.slot().getPaperCode()}">CS301</span></td>
                                     <td class="is-primary" th:text="${duty.slot().getPaperName()}">Data Structures</td>
-                                    <td><span class="code" th:text="${duty.room().getId()}">R201</span></td>
-                                    <td th:text="${duty.room().getBuilding()}">Block B</td>
-                                    <td class="is-numeric" th:text="${duty.seatedInRoom()}">24</td>
-                                    <td th:text="${duty.role()}">Invigilator</td>
+                                    <td><span class="code" th:text="${duty.room().getId()}">LH-01</span></td>
+                                    <td th:text="${duty.room().getBuilding()}">Block A</td>
+                                    <td class="is-numeric" th:text="${duty.seatedInRoom()}">30</td>
+                                    <td class="is-action">
+                                        <a class="button button--quiet button--small"
+                                           th:href="@{/rooms(slot=${duty.slot().getId()},
+                                                             room=${duty.room().getId()},
+                                                             professor=${professor})}">Seating →</a>
+                                    </td>
                                 </tr>
                                 </tbody>
                             </table>
@@ -127,105 +218,57 @@
                 </div>
             </section>
 
-            <p class="muted" th:if="${#lists.isEmpty(sittings)}">Nothing is seated in that room.</p>
+            <!-- ── Otherwise, the session's sittings ─────────────────────────────────── -->
+            <div th:unless="${searched}">
+                <p class="muted" th:if="${#lists.isEmpty(sittings)}">Nothing is seated in that room.</p>
 
-            <section class="panel" th:unless="${#lists.isEmpty(sittings)}">
-                <div class="panel__head">
-                    <h2 class="panel__title">Sittings</h2>
-                    <span class="label">
-                        <span class="mono" th:text="${#lists.size(sittings)}">18</span> room allocations ·
-                        <span class="mono" th:text="${seatedTotal}">480</span> seats
-                    </span>
-                </div>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Paper</th>
-                            <th>Title</th>
-                            <th>Room</th>
-                            <th>Building</th>
-                            <th class="is-numeric">Seated</th>
-                            <th class="is-numeric">Capacity</th>
-                            <th>Invigilator</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="sitting : ${sittings}">
-                            <td class="mono" th:text="${sitting.slot().getDate()}">2026-11-16</td>
-                            <td class="mono"
-                                th:text="${sitting.slot().getStartTime()} + '–' + ${sitting.slot().getEndTime()}">09:00–11:00</td>
-                            <td><span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span></td>
-                            <td class="is-primary" th:text="${sitting.slot().getPaperName()}">Data Structures</td>
-                            <td><span class="code" th:text="${sitting.room().getId()}">LH-01</span></td>
-                            <td th:text="${sitting.room().getBuilding()}">Block A</td>
-                            <td class="is-numeric" th:text="${sitting.seated()}">30</td>
-                            <td class="is-numeric" th:text="${sitting.room().capacity()}">30</td>
-                            <td>
-                                <span class="muted" th:if="${#lists.isEmpty(sitting.invigilators())}">none</span>
-                                <span th:each="member : ${sitting.invigilators()}">
-                                    <span th:text="${member.name}">Dr. Name</span>
-                                    <span class="code" th:text="${member.id}">F01</span>
-                                </span>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <p class="muted seating-hint" th:if="${room == null or room.isEmpty()}">
-                Choose a room above to see who sits in which seat.
-            </p>
-
-            <section class="panel" th:each="sitting : ${sittings}"
-                     th:if="${room != null and !room.isEmpty()}">
-                <div class="panel__head">
-                    <div>
-                        <h2 class="panel__title">
-                            <span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span>
-                            <span th:text="${sitting.slot().getPaperName()}">Data Structures</span>
-                        </h2>
-                        <p class="panel__note">
-                            <span class="mono" th:text="${sitting.slot().getDate()}">2026-11-16</span>
-                            <span class="mono"
-                                  th:text="${sitting.slot().getStartTime()} + '–' + ${sitting.slot().getEndTime()}">09:00–11:00</span>
-                            · <span th:text="${sitting.slot().getDurationLabel()}">2 h</span>
-                            · <span th:text="${sitting.room().getName()}">Hall</span>
-                        </p>
+                <section class="panel" th:unless="${#lists.isEmpty(sittings)}">
+                    <div class="panel__head">
+                        <h2 class="panel__title">Sittings</h2>
+                        <span class="label">
+                            <span class="mono" th:text="${#lists.size(sittings)}">18</span> room allocations ·
+                            <span class="mono" th:text="${seatedTotal}">480</span> seats
+                        </span>
                     </div>
-                    <div class="panel__aside">
-                        <span class="label">Invigilator</span>
-                        <p class="panel__note" th:if="${#lists.isEmpty(sitting.invigilators())}">none</p>
-                        <p class="panel__note" th:each="member : ${sitting.invigilators()}">
-                            <span th:text="${member.name}">Dr. Name</span>
-                            <span class="code" th:text="${member.id}">F01</span>
-                        </p>
+                    <div class="table-wrap">
+                        <table class="table table--linked">
+                            <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Time</th>
+                                <th scope="col">Paper</th>
+                                <th scope="col">Title</th>
+                                <th scope="col">Room</th>
+                                <th scope="col">Building</th>
+                                <th scope="col" class="is-numeric">Seated</th>
+                                <th scope="col" class="is-numeric">Capacity</th>
+                                <th scope="col">Invigilator</th>
+                                <th scope="col"></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="sitting : ${sittings}">
+                                <td class="mono" th:text="${sitting.slot().getDate()}">2026-11-16</td>
+                                <td class="mono"
+                                    th:text="${sitting.slot().getStartTime()} + '–' + ${sitting.slot().getEndTime()}">09:00–12:00</td>
+                                <td><span class="code" th:text="${sitting.slot().getPaperCode()}">CS301</span></td>
+                                <td class="is-primary" th:text="${sitting.slot().getPaperName()}">Data Structures</td>
+                                <td><span class="code" th:text="${sitting.room().getId()}">LH-01</span></td>
+                                <td th:text="${sitting.room().getBuilding()}">Block A</td>
+                                <td class="is-numeric" th:text="${sitting.seated()}">30</td>
+                                <td class="is-numeric" th:text="${sitting.room().capacity()}">30</td>
+                                <td th:text="${sitting.invigilatorNames()}">Dr Name (F01)</td>
+                                <td class="is-action">
+                                    <a class="button button--quiet button--small"
+                                       th:href="@{/rooms(slot=${sitting.slot().getId()},
+                                                         room=${sitting.room().getId()})}">Seating →</a>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                        <tr>
-                            <th class="is-numeric">Row</th>
-                            <th class="is-numeric">Seat</th>
-                            <th>Student</th>
-                            <th>Name</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="placed : ${sitting.students()}">
-                            <td class="is-numeric" th:text="${placed.row()}">1</td>
-                            <td class="is-numeric" th:text="${placed.column()}">1</td>
-                            <td><span class="code" th:text="${placed.student().getId()}">S001</span></td>
-                            <td class="is-primary" th:text="${placed.student().getName()}">Student Name</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                </section>
+            </div>
         </div>
 
     </div>

@@ -137,39 +137,39 @@ class UserAdminTest {
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void thePageListsTheImportedProfessorsAwaitingAnAccount() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
 
         mvc.perform(get("/users"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString("Professors from the imported workbook")))
                 .andExpect(content().string(Matchers.containsString("Dr Ayaan Example")))
-                .andExpect(content().string(Matchers.containsString("Will be created")));
+                .andExpect(content().string(Matchers.containsString("Ready to invite")));
 
-        assertTrue(accounts.find("ayaan@example.edu").isEmpty(), "looking creates nothing");
+        assertTrue(accounts.find("ayaan@thapar.edu").isEmpty(), "looking creates nothing");
     }
 
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void anAdministratorCanCreateEveryMissingProfessorAccountAtOnce() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
-        importedFaculty("F02", "Dr Bela Example", "bela@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
+        importedFaculty("F02", "Dr Bela Example", "bela@thapar.edu");
 
         mvc.perform(post("/users/professors").with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString("Accounts just created")))
                 .andExpect(content().string(Matchers.containsString("/activate?token=")));
 
-        AppUser created = accounts.find("ayaan@example.edu").orElseThrow();
+        AppUser created = accounts.find("ayaan@thapar.edu").orElseThrow();
         assertEquals("PROFESSOR", created.role());
         assertEquals("F01", created.facultyId());
         assertFalse(created.active(), "it cannot be signed into until its owner sets a password");
-        assertTrue(accounts.find("bela@example.edu").isPresent());
+        assertTrue(accounts.find("bela@thapar.edu").isPresent());
     }
 
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void theActivationLinkIsShownOnceAndNotAgainOnTheNextPageLoad() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
         mvc.perform(post("/users/professors").with(csrf()))
                 .andExpect(content().string(Matchers.containsString("/activate?token=")));
 
@@ -180,46 +180,46 @@ class UserAdminTest {
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void runningBulkCreationTwiceCreatesNothingTheSecondTime() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
         mvc.perform(post("/users/professors").with(csrf()));
-        String hashBefore = accounts.find("ayaan@example.edu").orElseThrow().passwordHash();
+        String hashBefore = accounts.find("ayaan@thapar.edu").orElseThrow().passwordHash();
 
         mvc.perform(post("/users/professors").with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString("already has an account")));
 
-        assertEquals(hashBefore, accounts.find("ayaan@example.edu").orElseThrow().passwordHash());
+        assertEquals(hashBefore, accounts.find("ayaan@thapar.edu").orElseThrow().passwordHash());
         assertEquals(2, users.count(), "the administrator plus the one professor");
     }
 
     @Test
     @WithMockUser(username = "professor@thapar.edu", roles = "PROFESSOR")
     void aProfessorCannotCreateAccountsInBulk() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
 
         mvc.perform(post("/users/professors").with(csrf())).andExpect(status().isForbidden());
 
-        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+        assertTrue(accounts.find("ayaan@thapar.edu").isEmpty());
         assertEquals(1, users.count(), "only the administrator the test started with");
     }
 
     @Test
     void aStrangerCannotCreateAccountsInBulk() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
 
         mvc.perform(post("/users/professors").with(csrf())).andExpect(status().is3xxRedirection());
 
-        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+        assertTrue(accounts.find("ayaan@thapar.edu").isEmpty());
     }
 
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void bulkCreationNeedsACsrfToken() throws Exception {
-        importedFaculty("F01", "Dr Ayaan Example", "ayaan@example.edu");
+        importedFaculty("F01", "Dr Ayaan Example", "ayaan@thapar.edu");
 
         mvc.perform(post("/users/professors")).andExpect(status().isForbidden());
 
-        assertTrue(accounts.find("ayaan@example.edu").isEmpty());
+        assertTrue(accounts.find("ayaan@thapar.edu").isEmpty());
     }
 
     @Test

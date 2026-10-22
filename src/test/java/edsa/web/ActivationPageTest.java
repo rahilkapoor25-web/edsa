@@ -54,7 +54,7 @@ class ActivationPageTest {
         jdbc.update("DELETE FROM app_user");
         jdbc.update("DELETE FROM faculty");
         jdbc.update("INSERT INTO faculty (id, name, email, department, available) "
-                + "VALUES ('F01', 'Dr Ayaan Example', 'ayaan@example.edu', 'CSE', TRUE)");
+                + "VALUES ('F01', 'Dr Ayaan Example', 'ayaan@thapar.edu', 'CSE', TRUE)");
     }
 
     private String aFreshToken() {
@@ -82,11 +82,11 @@ class ActivationPageTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Your password is set")));
 
-        assertTrue(users.findByEmail("ayaan@example.edu").orElseThrow().active());
+        assertTrue(users.findByEmail("ayaan@thapar.edu").orElseThrow().active());
         mvc.perform(SecurityMockMvcRequestBuilders.formLogin("/login")
                         .userParameter("email").passwordParam("password")
-                        .user("ayaan@example.edu").password("a-chosen-password"))
-                .andExpect(authenticated().withUsername("ayaan@example.edu"));
+                        .user("ayaan@thapar.edu").password("a-chosen-password"))
+                .andExpect(authenticated().withUsername("ayaan@thapar.edu"));
     }
 
     @Test
@@ -95,7 +95,7 @@ class ActivationPageTest {
 
         mvc.perform(SecurityMockMvcRequestBuilders.formLogin("/login")
                         .userParameter("email").passwordParam("password")
-                        .user("ayaan@example.edu").password("a-chosen-password"))
+                        .user("ayaan@thapar.edu").password("a-chosen-password"))
                 .andExpect(unauthenticated());
     }
 
@@ -110,7 +110,7 @@ class ActivationPageTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("do not match")));
 
-        assertFalse(users.findByEmail("ayaan@example.edu").orElseThrow().active());
+        assertFalse(users.findByEmail("ayaan@thapar.edu").orElseThrow().active());
         assertTrue(professors.isActivatable(token), "the link is not burnt by a mistake");
     }
 
@@ -122,7 +122,7 @@ class ActivationPageTest {
                         .param("token", token).param("password", "short").param("confirmation", "short"))
                 .andExpect(content().string(containsString("at least 8 characters")));
 
-        assertFalse(users.findByEmail("ayaan@example.edu").orElseThrow().active());
+        assertFalse(users.findByEmail("ayaan@thapar.edu").orElseThrow().active());
     }
 
     @Test
@@ -152,7 +152,7 @@ class ActivationPageTest {
                         .param("confirmation", "a-chosen-password"))
                 .andExpect(content().string(containsString("not valid")));
 
-        assertFalse(users.findByEmail("ayaan@example.edu").orElseThrow().active());
+        assertFalse(users.findByEmail("ayaan@thapar.edu").orElseThrow().active());
     }
 
     @Test
@@ -165,7 +165,7 @@ class ActivationPageTest {
                         .param("confirmation", "a-chosen-password"))
                 .andExpect(status().isForbidden());
 
-        assertFalse(users.findByEmail("ayaan@example.edu").orElseThrow().active());
+        assertFalse(users.findByEmail("ayaan@thapar.edu").orElseThrow().active());
     }
 
     @Test

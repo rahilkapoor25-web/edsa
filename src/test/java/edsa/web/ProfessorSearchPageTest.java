@@ -191,9 +191,10 @@ class ProfessorSearchPageTest {
         String page = mvc.perform(get("/rooms").param("professor", "Meera"))
                 .andReturn().getResponse().getContentAsString();
 
-        String results = page.substring(page.indexOf("Invigilator duties"), page.indexOf("Sittings"));
+        // The searched page is now nothing but the results — the session-wide sittings table
+        // is no longer rendered underneath — so the whole page is the thing to check.
         for (var student : workspace.data().students()) {
-            org.junit.jupiter.api.Assertions.assertFalse(results.contains(student.getName()),
+            org.junit.jupiter.api.Assertions.assertFalse(page.contains(student.getName()),
                     "a faculty search must not list students: " + student.getName());
         }
     }
