@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(pageTitle, activeTab, content)">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" th:fragment="page(pageTitle, activeTab, content)">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,13 +21,15 @@
             <span class="brand__name">EDSA</span>
             <span class="brand__expansion">Exam Duty &amp; Seating Allocation</span>
         </a>
-        <div class="session" th:if="${session.userEmail}">
-            <span class="session__user mono" th:text="${session.userEmail}">coordinator@thapar.edu</span>
-            <a class="session__logout" th:href="@{/logout}">Log out</a>
+        <div class="session" sec:authorize="isAuthenticated()">
+            <span class="session__user mono" sec:authentication="name">coordinator@example.edu</span>
+            <form class="session__logout-form" method="post" th:action="@{/logout}">
+                <button class="session__logout" type="submit">Log out</button>
+            </form>
         </div>
     </div>
 
-    <nav class="tabs" aria-label="Sections" th:if="${session.userEmail}">
+    <nav class="tabs" aria-label="Sections" sec:authorize="isAuthenticated()">
         <div class="tabs__inner shell">
             <a class="tab" th:classappend="${activeTab == 'data-and-run'} ? 'tab--active'"
                th:href="@{/}">Data and Run</a>
@@ -35,8 +37,10 @@
                th:href="@{/rooms}">Room schedule</a>
             <a class="tab" th:classappend="${activeTab == 'workloads'} ? 'tab--active'"
                th:href="@{/workloads}">Workloads</a>
-            <span class="tab tab--soon" title="Not built yet">Disruption</span>
-            <span class="tab tab--soon" title="Not built yet">Reports</span>
+            <a class="tab" th:classappend="${activeTab == 'disruption'} ? 'tab--active'"
+               th:href="@{/disruption}">Disruption</a>
+            <a class="tab" th:classappend="${activeTab == 'users'} ? 'tab--active'"
+               th:href="@{/users}" sec:authorize="hasRole('ADMIN')">Accounts</a>
         </div>
     </nav>
 </header>
@@ -51,6 +55,43 @@
         <span class="mono footer__note">prototype</span>
     </div>
 </footer>
+
+<!-- Progressive enhancement, and nothing more. Every form here works with JavaScript turned
+     off: this only asks before something destructive and stops an impatient second click
+     sending the same import twice. There is no framework and no external script. -->
+<script>
+    (function () {
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            var question = form.getAttribute('data-confirm');
+            if (question && !window.confirm(question)) {
+                event.preventDefault();
+                return;
+            }
+
+            if (form.dataset.submitted === 'true') {
+                event.preventDefault();
+                return;
+            }
+            form.dataset.submitted = 'true';
+
+            var busy = form.getAttribute('data-busy');
+            var button = form.querySelector('button[type="submit"]');
+            if (busy && button) {
+                // After the current tick: disabling a button during its own submit event
+                // cancels the submission in some browsers.
+                window.setTimeout(function () {
+                    button.disabled = true;
+                    button.textContent = busy;
+                }, 0);
+            }
+        });
+    })();
+</script>
 
 </body>
 </html>

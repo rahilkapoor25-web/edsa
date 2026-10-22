@@ -17,9 +17,11 @@ public class WorkloadsController {
     @GetMapping("/workloads")
     public String page(Model model) {
         model.addAttribute("hasPlan", workspace.hasPlan());
+        model.addAttribute("mode", workspace.mode());
         if (workspace.hasPlan()) {
-            model.addAttribute("workloads", workspace.plan().workloads());
-            model.addAttribute("dutyCount", workspace.plan().duties().all().size());
+            model.addAttribute("workloads", workspace.result().plan().workloads());
+            model.addAttribute("dutyCount", workspace.result().plan().duties().all().size());
+            model.addAttribute("schedule", workspace.result().plan().scheduledPapers());
         }
         return "workloads";
     }

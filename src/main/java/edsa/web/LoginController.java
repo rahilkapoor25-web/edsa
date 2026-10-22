@@ -1,59 +1,54 @@
 package edsa.web;
 
-import jakarta.servlet.http.HttpSession;
-
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * A placeholder gate, not authentication. Any address at the institute's domain is let in
- * with any password: nothing is verified, no account exists, and no password is ever checked.
- * It exists so the pages have someone to name and something to clear on the way out. The
- * missing security layer is recorded as a scope limitation in the SRS; replacing this with
- * a real login means replacing this class, not extending it.
+ * Shows the sign-in page.
+ *
+ * <p>Spring Security handles the POST; this only renders the form and the one message it is
+ * safe to show. That message never says whether an address is registered — an unknown
+ * account, a wrong password and a disabled account all read the same, and so does the
+ * message shown while a run of failures is being made to wait.
  */
 @Controller
 public class LoginController {
 
-    static final String USER_EMAIL = "userEmail";
+    private static final String REFUSED = "Email or password is incorrect";
 
-    private static final String INSTITUTE_DOMAIN = "@thapar.edu";
-    private static final String WRONG_DOMAIN = "Use your @thapar.edu account";
-    private static final String NO_PASSWORD = "Enter your password";
+    /**
+     * Shown after a run of failures. It says nothing about whether the address exists, and
+     * the wait clears itself, so nobody is locked out.
+     */
+    private static final String PAUSED =
+            "Too many sign-in attempts. Wait a minute and try again.";
+
+    /** Shown when an account is switched off while its owner is signed in. */
+    private static final String SWITCHED_OFF =
+            "Your account has been switched off. Ask the examination office to switch it back on.";
 
     @GetMapping("/login")
-    public String signInPage() {
-        return "login";
-    }
-
-    @PostMapping("/login")
-    public String signIn(@RequestParam String email, @RequestParam String password,
-                         HttpSession session, Model model) {
-        String address = email.trim().toLowerCase();
-
-        if (!address.endsWith(INSTITUTE_DOMAIN) || address.length() == INSTITUTE_DOMAIN.length()) {
-            return refused(model, email, WRONG_DOMAIN);
+    public String signInPage(@RequestParam(required = false) String error,
+                             @RequestParam(required = false) String loggedOut,
+                             @RequestParam(required = false) String throttled,
+                             @RequestParam(required = false) String disabled,
+                             Model model) {
+        if (error != null) {
+            model.addAttribute("error", REFUSED);
         }
-        if (password.isBlank()) {
-            return refused(model, email, NO_PASSWORD);
+        if (throttled != null) {
+            model.addAttribute("error", PAUSED);
         }
-
-        session.setAttribute(USER_EMAIL, address);
-        return "redirect:/";
-    }
-
-    @GetMapping("/logout")
-    public String signOut(HttpSession session) {
-        session.invalidate();
-        return "redirect:/login";
-    }
-
-    private String refused(Model model, String typedEmail, String problem) {
-        model.addAttribute("email", typedEmail);
-        model.addAttribute("error", problem);
+        if (loggedOut != null) {
+            model.addAttribute("notice", "You have been signed out");
+        }
+        if (disabled != null) {
+            // Only ever reached by somebody whose own session was just ended, so naming the
+            // reason tells them nothing they do not already know about their own account.
+            model.addAttribute("notice", SWITCHED_OFF);
+        }
         return "login";
     }
 }

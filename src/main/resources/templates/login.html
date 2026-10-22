@@ -7,15 +7,17 @@
     <div class="signin__card card">
         <p class="label">Examination office</p>
         <h1 class="signin__title">Sign in</h1>
-        <p class="signin__lead">Use your Thapar account to reach the seating plan and duty roster.</p>
+        <p class="signin__lead">Use the account the examination office issued you.</p>
 
         <form method="post" th:action="@{/login}" novalidate>
+            <p class="field__error" th:if="${error}" th:text="${error}">Email or password is incorrect</p>
+            <p class="notice" th:if="${notice}" th:text="${notice}">You have been signed out</p>
+
             <div class="field">
                 <label class="label" for="email">Email</label>
                 <input class="input mono" th:classappend="${error} ? 'input--error'"
                        type="email" id="email" name="email" autocomplete="username"
-                       placeholder="name@thapar.edu" th:value="${email}" autofocus>
-                <p class="field__error" th:if="${error}" th:text="${error}">Use your @thapar.edu account</p>
+                       placeholder="name@example.edu" autofocus>
             </div>
 
             <div class="field">

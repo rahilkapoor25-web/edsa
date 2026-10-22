@@ -1,9 +1,15 @@
 package edsa.core;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-/** One paper sat at one date and time. */
+/**
+ * One paper sat at one date and time, for a fixed number of minutes.
+ *
+ * <p>The interval is start-inclusive and end-exclusive, so a sitting that ends at 11:00 may be
+ * followed by another that starts at 11:00.
+ */
 public final class ExamSlot {
 
     private final String id;
@@ -11,16 +17,23 @@ public final class ExamSlot {
     private final String paperName;
     private final LocalDate date;
     private final LocalTime startTime;
-    private final LocalTime endTime;
+    private final int durationMinutes;
 
     public ExamSlot(String id, String paperCode, String paperName,
-                    LocalDate date, LocalTime startTime, LocalTime endTime) {
+                    LocalDate date, LocalTime startTime, int durationMinutes) {
         this.id = id;
         this.paperCode = paperCode;
         this.paperName = paperName;
         this.date = date;
         this.startTime = startTime;
-        this.endTime = endTime;
+        this.durationMinutes = durationMinutes;
+    }
+
+    /** Builds a slot from an explicit finish time rather than a duration. */
+    public static ExamSlot between(String id, String paperCode, String paperName,
+                                   LocalDate date, LocalTime startTime, LocalTime endTime) {
+        return new ExamSlot(id, paperCode, paperName, date, startTime,
+                (int) Duration.between(startTime, endTime).toMinutes());
     }
 
     public String getId() {
@@ -43,19 +56,31 @@ public final class ExamSlot {
         return startTime;
     }
 
-    public LocalTime getEndTime() {
-        return endTime;
+    public int getDurationMinutes() {
+        return durationMinutes;
     }
 
-    /** True when the two slots run at the same time on the same day, so nobody can attend both. */
+    /** The duration as it reads on screen: "10 min", "90 min", "2 h". */
+    public String getDurationLabel() {
+        return Durations.label(durationMinutes);
+    }
+
+    public LocalTime getEndTime() {
+        return startTime.plusMinutes(durationMinutes);
+    }
+
+    /**
+     * True when the two sittings share any moment of the same day, so nobody and no room can
+     * be in both. Touching intervals do not overlap.
+     */
     public boolean overlaps(ExamSlot other) {
         return date.equals(other.date)
-                && startTime.isBefore(other.endTime)
-                && other.startTime.isBefore(endTime);
+                && startTime.isBefore(other.getEndTime())
+                && other.startTime.isBefore(getEndTime());
     }
 
     @Override
     public String toString() {
-        return paperCode + " on " + date + " at " + startTime;
+        return paperCode + " on " + date + " at " + startTime + "-" + getEndTime();
     }
 }

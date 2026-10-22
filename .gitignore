@@ -36,3 +36,8 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# The local H2 database. It holds real accounts and imported records, so it never goes in git.
+# Anchored with a leading slash: a bare "data/" would also match the edsa.data packages under
+# src, and quietly hide new source files in them from git.
+/data/

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Accounts', 'users', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Administration</p>
+                <h1 class="page__title">Accounts</h1>
+            </div>
+            <p class="page__aside">
+                <span class="mono" th:text="${#lists.size(accounts)}">1</span> accounts
+            </p>
+        </div>
+
+        <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
+        <p class="notice" th:if="${notice}" th:text="${notice}">Done</p>
+
+        <div class="columns">
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Who can sign in</h2>
+                    <span class="label">Professors and administrators</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="account : ${accounts}">
+                            <td class="is-primary" th:text="${account.displayName()}">Name</td>
+                            <td><span class="mono" th:text="${account.email()}">name@thapar.edu</span></td>
+                            <td th:text="${account.role()}">PROFESSOR</td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${account.active()} ? 'badge--pass' : 'badge--fail'"
+                                      th:text="${account.active()} ? 'Active' : 'Disabled'">Active</span>
+                            </td>
+                            <td>
+                                <form method="post" th:action="@{/users/active}">
+                                    <input type="hidden" name="email" th:value="${account.email()}">
+                                    <input type="hidden" name="active" th:value="${!account.active()}">
+                                    <button class="button button--quiet button--small" type="submit"
+                                            th:text="${account.active()} ? 'Disable' : 'Enable'">Disable</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Add an account</h2>
+                    <span class="label">Admin only</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        Professors cannot register themselves. Create one account here and pass the
+                        password on, or create them all at once from the imported faculty records below.
+                    </p>
+                    <form method="post" th:action="@{/users}">
+                        <div class="field">
+                            <label class="label" for="displayName">Name</label>
+                            <input class="input" type="text" id="displayName" name="displayName" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="email">Email</label>
+                            <input class="input mono" type="email" id="email" name="email"
+                                   placeholder="name@thapar.edu" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="password">Temporary password</label>
+                            <input class="input" type="text" id="password" name="password"
+                                   placeholder="at least 8 characters" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="role">Role</label>
+                            <select class="input select" id="role" name="role">
+                                <option value="PROFESSOR">Professor — can plan and download</option>
+                                <option value="ADMIN">Administrator — can also manage accounts</option>
+                            </select>
+                        </div>
+                        <button class="button button--full" type="submit">Create account</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+
+        <section class="panel">
+            <div class="panel__head">
+                <h2 class="panel__title">Professors from the imported workbook</h2>
+                <span class="label">
+                    <span class="mono" th:text="${eligibleCount}">0</span> ready to invite
+                </span>
+            </div>
+            <div class="panel__body">
+                <p class="muted" th:if="${#lists.isEmpty(candidates)}">
+                    No faculty records have been imported yet. Import the workbook on
+                    <a th:href="@{/}">Data and Run</a> and the professors on its Faculty worksheet
+                    will be listed here.
+                </p>
+
+                <div th:unless="${#lists.isEmpty(candidates)}">
+                    <p class="muted">
+                        These are the faculty records already imported — no second upload is needed.
+                        Each new account is tied to its faculty id, gets the
+                        <span class="mono">PROFESSOR</span> role, and is created without a password:
+                        its owner sets their own through a single-use link that expires. Nobody who
+                        already has an account is touched.
+                    </p>
+                    <p class="notice">
+                        <strong>EDSA does not send email.</strong> It has no mail server configured,
+                        so nothing is delivered to anybody. Creating the accounts shows you one link
+                        per professor, once, and handing those links out is yours to do.
+                    </p>
+
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Faculty</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Account</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="candidate : ${candidates}">
+                                <td class="is-primary">
+                                    <span th:text="${candidate.name()}">Dr Name</span>
+                                    <span class="code" th:text="${candidate.facultyId()}">F01</span>
+                                </td>
+                                <td>
+                                    <span class="mono" th:if="${candidate.email()}"
+                                          th:text="${candidate.email()}">name@thapar.edu</span>
+                                    <span class="muted" th:unless="${candidate.email()}">none</span>
+                                </td>
+                                <td th:text="${candidate.department()} ?: ''">CSE</td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${candidate.isEligible()} ? 'badge--wait'
+                                              : (${candidate.eligibility().name() == 'SKIPPED'} ? 'badge--pass' : 'badge--fail')"
+                                          th:text="${candidate.eligibility().label()}">Will be created</span>
+                                    <p class="leave-reason" th:text="${candidate.reason()}">No account yet</p>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <form method="post" th:action="@{/users/professors}" th:if="${eligibleCount > 0}"
+                          data-confirm="This creates an account for every listed professor without one. Their activation links are shown once and not again. Continue?"
+                          data-busy="Creating accounts...">
+                        <button class="button" type="submit">
+                            Create <span th:text="${eligibleCount}">0</span> missing professor
+                            <span th:text="${eligibleCount == 1} ? 'account' : 'accounts'">accounts</span>
+                        </button>
+                    </form>
+                    <p class="muted" th:if="${eligibleCount == 0}">
+                        Every imported professor with a usable address already has an account.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" th:if="${summary}">
+            <div class="panel__head">
+                <h2 class="panel__title">Accounts just created</h2>
+                <span class="label">
+                    <span class="mono" th:text="${summary.createdCount()}">0</span> created ·
+                    <span class="mono" th:text="${summary.skippedCount()}">0</span> skipped ·
+                    <span class="mono" th:text="${summary.unusableCount()}">0</span> unusable
+                </span>
+            </div>
+            <div class="panel__body">
+                <p class="notice notice--error" th:unless="${#lists.isEmpty(summary.failures())}">
+                    Some records could not be created:
+                    <span th:each="failure : ${summary.failures()}" th:text="${failure}">reason</span>
+                </p>
+
+                <div th:unless="${#lists.isEmpty(summary.created())}">
+                    <p class="notice">
+                        <strong>No email has been sent.</strong> Copy each link below and give it to
+                        that professor yourself. They are shown once and are not stored anywhere in
+                        readable form, so if you leave this page they cannot be shown again — the
+                        only way back is to disable the account and create it afresh. Each link works
+                        once and expires, and the account cannot be signed into until its owner has
+                        set their own password through it.
+                    </p>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Faculty</th>
+                                <th>Email</th>
+                                <th>Invitation link to pass on</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="account : ${summary.created()}">
+                                <td class="is-primary">
+                                    <span th:text="${account.name()}">Dr Name</span>
+                                    <span class="code" th:text="${account.facultyId()}">F01</span>
+                                </td>
+                                <td><span class="mono" th:text="${account.email()}">name@thapar.edu</span></td>
+                                <td>
+                                    <a class="mono" th:href="@{/activate(token=${account.activationToken()})}"
+                                       th:text="@{/activate(token=${account.activationToken()})}">/activate?token=…</a>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <p class="muted" th:if="${#lists.isEmpty(summary.created())}">
+                    No account was created.
+                </p>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+</body>
+</html>

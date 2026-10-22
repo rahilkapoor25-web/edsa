@@ -1,6 +1,6 @@
 package edsa.data;
 
-import edsa.core.ExamSlot;
+import edsa.core.Exam;
 import edsa.core.Faculty;
 import edsa.core.InvalidInputException;
 import edsa.core.Room;
@@ -60,12 +60,12 @@ public final class CsvReader {
         return read(source, fileName, faculty());
     }
 
-    public List<ExamSlot> readSlots(Path file) {
-        return read(file, slots());
+    public List<Exam> readExams(Path file) {
+        return read(file, exams());
     }
 
-    public List<ExamSlot> readSlots(Reader source, String fileName) {
-        return read(source, fileName, slots());
+    public List<Exam> readExams(Reader source, String fileName) {
+        return read(source, fileName, exams());
     }
 
     private static Format<Student> students() {
@@ -94,20 +94,25 @@ public final class CsvReader {
                 optionalCodes(fields[4])));
     }
 
-    private static Format<ExamSlot> slots() {
-        return new Format<>(6, ExamSlot::getId, fields -> {
+    /**
+     * The timetable file declares when a paper may start. Its end_time is validated but not
+     * used as the duration: the selected exam mode decides how long a sitting runs, so
+     * switching mode re-times the whole timetable.
+     */
+    private static Format<Exam> exams() {
+        return new Format<>(6, Exam::getId, fields -> {
             LocalTime start = requireTime(fields[4], "start_time");
             LocalTime end = requireTime(fields[5], "end_time");
             if (!end.isAfter(start)) {
                 throw new IllegalArgumentException("end_time " + fields[5] + " is not after start_time " + fields[4]);
             }
-            return new ExamSlot(
+            return new Exam(
                     requireText(fields[0], "slot_id"),
                     requireText(fields[1], "paper_code"),
                     requireText(fields[2], "paper_name"),
                     requireDate(fields[3], "exam_date"),
                     start,
-                    end);
+                    null);
         });
     }
 

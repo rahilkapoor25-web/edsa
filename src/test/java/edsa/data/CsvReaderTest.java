@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import edsa.core.ExamSlot;
+import edsa.core.Exam;
 import edsa.core.Faculty;
 import edsa.core.InvalidInputException;
 import edsa.core.Room;
@@ -94,22 +94,21 @@ class CsvReaderTest {
 
         @Test
         void readsEverySlot() throws Exception {
-            List<ExamSlot> slots = reader.readSlots(sample("timetable.csv"));
+            List<Exam> exams = reader.readExams(sample("timetable.csv"));
 
-            assertEquals(6, slots.size());
-            ExamSlot first = slots.get(0);
+            assertEquals(6, exams.size());
+            Exam first = exams.get(0);
             assertEquals("E1", first.getId());
-            assertEquals("CS301", first.getPaperCode());
-            assertEquals("Data Structures", first.getPaperName());
+            assertEquals("CS301", first.getSubjectCode());
+            assertEquals("Data Structures", first.getSubjectName());
             assertEquals(LocalDate.of(2026, 11, 10), first.getDate());
-            assertEquals(LocalTime.of(9, 30), first.getStartTime());
-            assertEquals(LocalTime.of(12, 30), first.getEndTime());
-        }
+            assertEquals(LocalTime.of(9, 30), first.getPermittedStart().orElseThrow());
+            }
 
         @Test
         void everyPaperStudentsSitAppearsInTheTimetable() throws Exception {
-            Set<String> timetabled = reader.readSlots(sample("timetable.csv")).stream()
-                    .map(ExamSlot::getPaperCode)
+            Set<String> timetabled = reader.readExams(sample("timetable.csv")).stream()
+                    .map(Exam::getSubjectCode)
                     .collect(Collectors.toSet());
 
             reader.readStudents(sample("students.csv")).forEach(student ->
@@ -223,7 +222,7 @@ class CsvReaderTest {
                     "E1,CS301,Data Structures,10-11-2026,09:30,12:30");
 
             InvalidInputException thrown =
-                    assertThrows(InvalidInputException.class, () -> reader.readSlots(file));
+                    assertThrows(InvalidInputException.class, () -> reader.readExams(file));
 
             assertTrue(thrown.getMessage().contains("exam_date is not a date"), thrown.getMessage());
         }
@@ -235,7 +234,7 @@ class CsvReaderTest {
                     "E1,CS301,Data Structures,2026-11-10,half nine,12:30");
 
             InvalidInputException thrown =
-                    assertThrows(InvalidInputException.class, () -> reader.readSlots(file));
+                    assertThrows(InvalidInputException.class, () -> reader.readExams(file));
 
             assertTrue(thrown.getMessage().contains("start_time is not a time"), thrown.getMessage());
         }
@@ -247,7 +246,7 @@ class CsvReaderTest {
                     "E1,CS301,Data Structures,2026-11-10,12:30,09:30");
 
             InvalidInputException thrown =
-                    assertThrows(InvalidInputException.class, () -> reader.readSlots(file));
+                    assertThrows(InvalidInputException.class, () -> reader.readExams(file));
 
             assertEquals(2, thrown.getLineNumber());
             assertTrue(thrown.getMessage().contains("is not after start_time"), thrown.getMessage());

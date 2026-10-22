@@ -12,6 +12,7 @@
                 <h1 class="page__title">Workloads</h1>
             </div>
             <p class="page__aside" th:if="${hasPlan}">
+                <span th:text="${mode.label()}">Endsem</span> ·
                 <span class="mono" th:text="${dutyCount}">6</span> duties in all
             </p>
         </div>

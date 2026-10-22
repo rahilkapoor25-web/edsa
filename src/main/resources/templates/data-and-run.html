@@ -8,10 +8,10 @@
     <section class="hero hero--short">
         <div class="shell">
             <p class="hero__eyebrow">Examination office</p>
-            <h1 class="hero__title">Load the four files, then compute the plan.</h1>
+            <h1 class="hero__title">Load the workbook, pick the mode, compute the timetable.</h1>
             <p class="hero__lead">
-                Every seat and every duty is checked against the hard rules as it is chosen, so
-                what comes back is either a legal plan or a clear reason why there isn't one.
+                The selected mode decides how long every paper runs, and the timetable is rebuilt
+                around it: start and end times, parallel rooms, seating and invigilation duties.
             </p>
         </div>
     </section>
@@ -20,30 +20,74 @@
 
         <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
 
+        <section class="panel" th:if="${report}">
+            <div class="panel__head">
+                <h2 class="panel__title">Workbook import</h2>
+                <span class="badge" th:classappend="${report.successful()} ? 'badge--pass' : 'badge--fail'"
+                      th:text="${report.successful()} ? 'Imported' : 'Rejected'">Imported</span>
+            </div>
+            <div class="panel__body">
+                <dl class="figures" th:if="${report.successful()}">
+                    <div class="figure">
+                        <dt class="label">Students</dt>
+                        <dd class="figure__value mono" th:text="${report.students()}">0</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Faculty</dt>
+                        <dd class="figure__value mono" th:text="${report.faculty()}">0</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Rooms</dt>
+                        <dd class="figure__value mono" th:text="${report.rooms()}">0</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Subjects</dt>
+                        <dd class="figure__value mono" th:text="${report.subjects()}">0</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Enrollments</dt>
+                        <dd class="figure__value mono" th:text="${report.enrollments()}">0</dd>
+                    </div>
+                    <div class="figure">
+                        <dt class="label">Exams</dt>
+                        <dd class="figure__value mono" th:text="${report.exams()}">0</dd>
+                    </div>
+                </dl>
+                <div th:unless="${report.successful()}">
+                    <p class="muted">Nothing was imported. The database is unchanged.</p>
+                    <ul class="problems">
+                        <li th:each="problem : ${report.errors()}" th:text="${problem}">Worksheet error</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
         <section class="stats" th:if="${hasData}">
             <article class="card">
                 <span class="label">Students</span>
-                <span class="stat__value" th:text="${studentCount}">60</span>
-                <p class="stat__note">rows read</p>
+                <span class="stat__value" th:text="${studentCount}">0</span>
+                <p class="stat__note">registered candidates</p>
             </article>
             <article class="card">
                 <span class="label">Rooms</span>
-                <span class="stat__value" th:text="${roomCount}">4</span>
-                <p class="stat__note">rows read</p>
+                <span class="stat__value" th:text="${roomCount}">0</span>
+                <p class="stat__note"><span class="mono" th:text="${seatCount}">0</span> seats available</p>
             </article>
             <article class="card">
                 <span class="label">Faculty</span>
-                <span class="stat__value" th:text="${facultyCount}">8</span>
-                <p class="stat__note">rows read</p>
+                <span class="stat__value" th:text="${facultyCount}">0</span>
+                <p class="stat__note">available to invigilate</p>
             </article>
             <article class="card">
-                <span class="label">Exam slots</span>
-                <span class="stat__value" th:text="${slotCount}">6</span>
-                <p class="stat__note">rows read</p>
+                <span class="label">Exams</span>
+                <span class="stat__value" th:text="${examCount}">0</span>
+                <p class="stat__note">papers to schedule</p>
             </article>
         </section>
 
-        <div class="columns columns--even">
+        <!-- Changing the data, the mode or the plan is the examination office's job; the server
+             refuses it for anybody else, so a professor is not shown the forms either. -->
+        <div class="columns columns--even" th:if="${canChangeData}">
 
             <section class="panel">
                 <div class="panel__head">
@@ -51,7 +95,33 @@
                     <span class="label" th:text="${hasData} ? 'Loaded' : 'Nothing loaded'">Nothing loaded</span>
                 </div>
                 <div class="panel__body">
-                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data">
+                    <h3 class="subhead">Upload Excel workbook</h3>
+                    <p class="muted">
+                        One <span class="mono">.xlsx</span> file with the Students, Faculty, Rooms,
+                        Subjects, Enrollments and Exams worksheets.
+                    </p>
+                    <form method="post" th:action="@{/data/workbook}" enctype="multipart/form-data"
+                          data-confirm="Importing replaces every stored student, faculty member, room, subject, enrollment and exam. Continue?"
+                          data-busy="Importing...">
+                        <div class="field">
+                            <label class="label" for="workbook">Workbook</label>
+                            <input class="input input--file" type="file" id="workbook" name="workbook" accept=".xlsx">
+                        </div>
+                        <button class="button button--full" type="submit">Import workbook</button>
+                    </form>
+                    <div class="actions">
+                        <a class="button button--quiet" th:href="@{/import-template.xlsx}">Download Excel template</a>
+                        <form method="post" th:action="@{/data/stored}" th:if="${storedData}">
+                            <button class="button button--quiet" type="submit">Use imported data</button>
+                        </form>
+                    </div>
+
+                    <p class="or">or</p>
+
+                    <h3 class="subhead">Legacy CSV upload</h3>
+                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data"
+                          data-confirm="Uploading replaces the session currently loaded. Continue?"
+                          data-busy="Uploading...">
                         <div class="field">
                             <label class="label" for="students">Students CSV</label>
                             <input class="input input--file" type="file" id="students" name="students" accept=".csv">
@@ -68,12 +138,14 @@
                             <label class="label" for="timetable">Timetable CSV</label>
                             <input class="input input--file" type="file" id="timetable" name="timetable" accept=".csv">
                         </div>
-                        <button class="button button--full" type="submit">Upload the four files</button>
+                        <button class="button button--quiet button--full" type="submit">Upload the four CSV files</button>
                     </form>
 
                     <p class="or">or</p>
 
-                    <form method="post" th:action="@{/data/sample}">
+                    <form method="post" th:action="@{/data/sample}"
+                          data-confirm="This replaces the session currently loaded with the sample data. Continue?"
+                          data-busy="Loading...">
                         <button class="button button--quiet button--full" type="submit">
                             Load the bundled sample data
                         </button>
@@ -83,34 +155,72 @@
 
             <section class="panel">
                 <div class="panel__head">
-                    <h2 class="panel__title">2 · Compute</h2>
+                    <h2 class="panel__title">2 · Mode and compute</h2>
                     <span class="label" th:text="${hasPlan} ? 'Plan ready' : 'Not computed'">Not computed</span>
                 </div>
                 <div class="panel__body">
 
-                    <p class="muted" th:unless="${hasData}">
-                        Load the four files first. The allocator needs students, rooms, faculty and a
-                        timetable before it can seat anybody.
+                    <form class="modes" method="post" th:action="@{/mode}" data-busy="Re-timing...">
+                        <fieldset class="modes__set">
+                            <legend class="label">Exam mode</legend>
+                            <label class="mode" th:each="option : ${modes}"
+                                   th:classappend="${option == mode} ? 'mode--chosen'">
+                                <input type="radio" name="mode" th:value="${option.name()}"
+                                       th:checked="${option == mode}">
+                                <span class="mode__name" th:text="${option.label()}">Midsem</span>
+                                <span class="mode__minutes"
+                                      th:text="${option.durationLabel()}">2 h</span>
+                            </label>
+                        </fieldset>
+                        <button class="button button--quiet button--full" type="submit">Use this mode</button>
+                    </form>
+
+                    <p class="muted mode__current">
+                        Selected: <strong th:text="${mode.label()}">Endsem</strong>,
+                        <strong th:text="${mode.durationLabel()}">3 h</strong> per paper<span
+                            th:if="${mode.allowsDurationOverride()}"> unless a paper sets its own
+                        length</span>. The mode decides every start and end time.
                     </p>
 
-                    <form method="post" th:action="@{/compute}" th:if="${hasData}">
-                        <button class="button button--full" type="submit"
-                                th:text="${hasPlan} ? 'Compute again' : 'Compute the plan'">Compute the plan</button>
+                    <p class="notice" th:if="${ignoredOverrides != null and !#lists.isEmpty(ignoredOverrides)}">
+                        <span th:text="${#lists.size(ignoredOverrides)}">1</span>
+                        <span th:text="${#lists.size(ignoredOverrides) == 1} ? 'paper declares' : 'papers declare'">papers declare</span>
+                        a length this mode does not accept, so
+                        <strong th:text="${mode.durationLabel()}">10 min</strong> is used instead:
+                        <span th:each="ignored, state : ${ignoredOverrides}">
+                            <span th:text="${ignored}">CS301 (E1) declares 90 minutes</span><span
+                                th:unless="${state.last}">; </span>
+                        </span>
+                    </p>
+
+                    <p class="muted" th:unless="${hasData}">
+                        Load the data first. The scheduler needs students, rooms, faculty and exams.
+                    </p>
+
+                    <p class="muted" th:if="${hasData}">
+                        The timetable is built as soon as data is imported, and rebuilt when the mode
+                        changes. Recompute only if you want to run the scheduler again.
+                    </p>
+
+                    <form method="post" th:action="@{/compute}" th:if="${hasData}"
+                          data-confirm="Recomputing builds the plan again and discards any absence cover already applied to it. Continue?"
+                          data-busy="Computing...">
+                        <button class="button button--quiet button--full" type="submit">Recompute</button>
                     </form>
 
                     <div th:if="${hasPlan}">
                         <dl class="figures">
                             <div class="figure">
+                                <dt class="label">Papers</dt>
+                                <dd class="figure__value mono" th:text="${#lists.size(schedule)}">0</dd>
+                            </div>
+                            <div class="figure">
                                 <dt class="label">Seated</dt>
-                                <dd class="figure__value mono" th:text="${seated}">128</dd>
+                                <dd class="figure__value mono" th:text="${seated}">0</dd>
                             </div>
                             <div class="figure">
                                 <dt class="label">Duties</dt>
-                                <dd class="figure__value mono" th:text="${dutyCount}">6</dd>
-                            </div>
-                            <div class="figure">
-                                <dt class="label">Score</dt>
-                                <dd class="figure__value mono" th:text="${score}">0</dd>
+                                <dd class="figure__value mono" th:text="${dutyCount}">0</dd>
                             </div>
                         </dl>
 
@@ -132,15 +242,25 @@
                                           th:classappend="${check.satisfied()} ? 'badge--pass' : 'badge--fail'"
                                           th:text="${check.satisfied()} ? 'Pass' : 'Fail'">Pass</span>
                                 </td>
-                                <td class="is-numeric" th:text="${check.breaches()}">0</td>
+                                <td class="is-numeric" th:text="${check.breachCount()}">0</td>
                             </tr>
                             </tbody>
                         </table>
 
-                        <div class="actions">
+                        <div th:unless="${usable}" class="problems-block">
+                            <p class="notice notice--error">
+                                This plan is not usable. Nothing below is presented as a finished timetable.
+                            </p>
+                            <ul class="problems">
+                                <li th:each="problem : ${problems}" th:text="${problem}">Reason</li>
+                            </ul>
+                        </div>
+
+                        <div class="actions" th:if="${usable}">
                             <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
                             <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
-                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">Download CSV</a>
+                            <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
+                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
                         </div>
                     </div>
                 </div>
@@ -148,29 +268,66 @@
 
         </div>
 
-        <section class="panel" th:if="${hasData}">
+        <section class="panel" th:if="${hasPlan and !canChangeData}">
+            <div class="panel__head">
+                <h2 class="panel__title">This session</h2>
+                <span class="label" th:text="${mode.label()} + ' · ' + ${mode.durationLabel()}">
+                    Endsem · 3 h</span>
+            </div>
+            <div class="panel__body">
+                <p class="muted">
+                    The examination office sets the data and the mode. Your duties are on
+                    <a th:href="@{/workloads}">Workloads</a>, the seating is on
+                    <a th:href="@{/rooms}">Room schedule</a>, and you can report an absence on
+                    <a th:href="@{/disruption}">Disruption</a>.
+                </p>
+                <div class="actions">
+                    <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
+                    <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
+                    <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
+                    <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="card empty" th:if="${!hasPlan and !canChangeData}">
+            <h2 class="empty__title">Nothing has been planned yet</h2>
+            <p class="empty__note">
+                The examination office has not imported this session's data yet. Once they have,
+                your duties and the seating plan appear here.
+            </p>
+        </section>
+
+        <section class="panel" th:if="${hasPlan}">
             <div class="panel__head">
                 <h2 class="panel__title">Timetable</h2>
-                <span class="label">As loaded</span>
+                <span class="label" th:text="${mode.label()} + ' · ' + ${mode.durationLabel()}">
+                    Endsem · 3 h</span>
             </div>
             <div class="table-wrap">
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>Slot</th>
-                        <th>Paper</th>
-                        <th>Title</th>
                         <th>Date</th>
                         <th>Time</th>
+                        <th>Paper</th>
+                        <th>Title</th>
+                        <th>Length</th>
+                        <th class="is-numeric">Students</th>
+                        <th class="is-numeric">Rooms</th>
+                        <th class="is-numeric">Invigilators</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="slot : ${slots}">
-                        <td><span class="code" th:text="${slot.id}">E1</span></td>
-                        <td><span class="code" th:text="${slot.paperCode}">CS301</span></td>
-                        <td class="is-primary" th:text="${slot.paperName}">Data Structures</td>
-                        <td class="mono" th:text="${slot.date}">2026-11-10</td>
-                        <td class="mono" th:text="${slot.startTime} + '-' + ${slot.endTime}">09:30-12:30</td>
+                    <tr th:each="row : ${scheduleRows}">
+                        <td class="mono" th:text="${row.date}">2026-11-16</td>
+                        <td class="mono" th:text="${row.time}">09:00–11:00</td>
+                        <td><span class="code" th:text="${row.paperCode}">CS301</span></td>
+                        <td class="is-primary" th:text="${row.paperName}">Data Structures</td>
+                        <td th:text="${row.length}">2 h</td>
+                        <td class="is-numeric" th:text="${row.students}">180</td>
+                        <td class="is-numeric" th:text="${row.rooms}">6</td>
+                        <td class="is-numeric" th:text="${row.invigilators}">6</td>
                     </tr>
                     </tbody>
                 </table>
