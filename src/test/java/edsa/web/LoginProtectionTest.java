@@ -117,14 +117,21 @@ class LoginProtectionTest {
 
     @Test
     void theWaitingMessageGivesNothingAwayAboutTheAccount() throws Exception {
-        mvc.perform(get("/login").param("throttled", ""))
+        String page = mvc.perform(get("/login").param("throttled", ""))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Too many sign-in attempts")))
-                // It must not reveal whether the address exists, is disabled, or is unknown.
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("does not exist"))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("disabled"))));
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(page.contains("Too many sign-in attempts"), page);
+
+        // The message must not say whether the address exists, is registered or is switched
+        // off. Checked as phrases a reader would see rather than as bare words, so that an
+        // unrelated mention elsewhere in the markup cannot make this pass or fail by accident.
+        for (String leak : new String[] {
+                "does not exist", "no such account", "unknown address", "not registered",
+                "account is disabled", "has been disabled", "wrong password", "incorrect password"}) {
+            org.junit.jupiter.api.Assertions.assertFalse(page.contains(leak),
+                    "the waiting message must not say '" + leak + "'");
+        }
     }
 
     @Test

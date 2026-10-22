@@ -155,7 +155,9 @@
                         </table>
                     </div>
 
-                    <form method="post" th:action="@{/users/professors}" th:if="${eligibleCount > 0}">
+                    <form method="post" th:action="@{/users/professors}" th:if="${eligibleCount > 0}"
+                          data-confirm="This creates an account for every listed professor without one. Their activation links are shown once and not again. Continue?"
+                          data-busy="Creating accounts...">
                         <button class="button" type="submit">
                             Create <span th:text="${eligibleCount}">0</span> missing professor
                             <span th:text="${eligibleCount == 1} ? 'account' : 'accounts'">accounts</span>

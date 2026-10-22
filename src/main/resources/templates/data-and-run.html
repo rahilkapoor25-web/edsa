@@ -100,7 +100,9 @@
                         One <span class="mono">.xlsx</span> file with the Students, Faculty, Rooms,
                         Subjects, Enrollments and Exams worksheets.
                     </p>
-                    <form method="post" th:action="@{/data/workbook}" enctype="multipart/form-data">
+                    <form method="post" th:action="@{/data/workbook}" enctype="multipart/form-data"
+                          data-confirm="Importing replaces every stored student, faculty member, room, subject, enrollment and exam. Continue?"
+                          data-busy="Importing...">
                         <div class="field">
                             <label class="label" for="workbook">Workbook</label>
                             <input class="input input--file" type="file" id="workbook" name="workbook" accept=".xlsx">
@@ -117,7 +119,9 @@
                     <p class="or">or</p>
 
                     <h3 class="subhead">Legacy CSV upload</h3>
-                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data">
+                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data"
+                          data-confirm="Uploading replaces the session currently loaded. Continue?"
+                          data-busy="Uploading...">
                         <div class="field">
                             <label class="label" for="students">Students CSV</label>
                             <input class="input input--file" type="file" id="students" name="students" accept=".csv">
@@ -139,7 +143,9 @@
 
                     <p class="or">or</p>
 
-                    <form method="post" th:action="@{/data/sample}">
+                    <form method="post" th:action="@{/data/sample}"
+                          data-confirm="This replaces the session currently loaded with the sample data. Continue?"
+                          data-busy="Loading...">
                         <button class="button button--quiet button--full" type="submit">
                             Load the bundled sample data
                         </button>
@@ -154,7 +160,7 @@
                 </div>
                 <div class="panel__body">
 
-                    <form class="modes" method="post" th:action="@{/mode}">
+                    <form class="modes" method="post" th:action="@{/mode}" data-busy="Re-timing...">
                         <fieldset class="modes__set">
                             <legend class="label">Exam mode</legend>
                             <label class="mode" th:each="option : ${modes}"
@@ -196,7 +202,9 @@
                         changes. Recompute only if you want to run the scheduler again.
                     </p>
 
-                    <form method="post" th:action="@{/compute}" th:if="${hasData}">
+                    <form method="post" th:action="@{/compute}" th:if="${hasData}"
+                          data-confirm="Recomputing builds the plan again and discards any absence cover already applied to it. Continue?"
+                          data-busy="Computing...">
                         <button class="button button--quiet button--full" type="submit">Recompute</button>
                     </form>
 

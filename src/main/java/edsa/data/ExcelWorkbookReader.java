@@ -63,6 +63,31 @@ public final class ExcelWorkbookReader {
     /** A guard against a small file that expands into an enormous one. */
     private static final double MAX_COMPRESSION_RATIO = 0.01;
 
+    /**
+     * Hard ceilings on what a workbook may expand into, applied while it is being unzipped
+     * rather than afterwards.
+     *
+     * <p>The compression-ratio guard alone is not enough: it permits a hundredfold expansion,
+     * so a twelve megabyte upload could still inflate into something over a gigabyte and
+     * exhaust the application's memory before a single row had been looked at. These caps
+     * stop the unzip instead, which is the only point at which it can still be stopped
+     * cheaply. They are far above any real examination session and far below anything that
+     * would hurt.
+     */
+    private static final long MAX_ENTRY_BYTES = 64L * 1024 * 1024;
+    private static final long MAX_TEXT_BYTES = 32L * 1024 * 1024;
+    private static final long MAX_PARTS = 1_000;
+
+    /**
+     * The most rows one worksheet may hold.
+     *
+     * <p>Enrollments is the biggest sheet in practice — one row per student per paper — and
+     * fifty thousand covers a session several times larger than the office runs. A file that
+     * is within every byte limit but still absurd is refused with a message that says which
+     * worksheet, rather than being allowed to fill memory.
+     */
+    public static final int MAX_ROWS_PER_SHEET = 50_000;
+
     private final List<String> errors = new ArrayList<>();
 
     /**
@@ -73,11 +98,26 @@ public final class ExcelWorkbookReader {
     public java.util.Optional<ImportedWorkbook> read(InputStream source) {
         errors.clear();
         ZipSecureFile.setMinInflateRatio(MAX_COMPRESSION_RATIO);
+        ZipSecureFile.setMaxEntrySize(MAX_ENTRY_BYTES);
+        ZipSecureFile.setMaxTextSize(MAX_TEXT_BYTES);
+        ZipSecureFile.setMaxFileCount(MAX_PARTS);
 
         try (Workbook workbook = new XSSFWorkbook(source)) {
             for (String required : REQUIRED_SHEETS) {
                 if (workbook.getSheet(required) == null) {
                     errors.add("The workbook has no worksheet named '" + required + "'");
+                }
+            }
+            if (!errors.isEmpty()) {
+                return java.util.Optional.empty();
+            }
+
+            for (String required : REQUIRED_SHEETS) {
+                int rows = workbook.getSheet(required).getLastRowNum() + 1;
+                if (rows > MAX_ROWS_PER_SHEET) {
+                    errors.add("Worksheet '" + required + "' has " + rows + " rows, which is more than "
+                            + "the " + MAX_ROWS_PER_SHEET + " this import accepts. Split the session up "
+                            + "or check for stray rows below the data.");
                 }
             }
             if (!errors.isEmpty()) {

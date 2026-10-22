@@ -131,6 +131,21 @@ public class UserRepository {
                 passwordHash, accountId) == 1;
     }
 
+    /**
+     * Puts the configured administrator back in working order: a known password, enabled, and
+     * holding the administrator role.
+     *
+     * <p>Any half-finished activation is cleared at the same time, so an address that was
+     * provisioned as a professor and is now being made the administrator does not leave a
+     * usable activation link behind.
+     */
+    public void resetAdministrator(String email, String passwordHash) {
+        jdbc.update("UPDATE app_user SET password_hash = ?, active = TRUE, role = ?, "
+                        + "activation_hash = NULL, activation_expires_at = NULL "
+                        + "WHERE LOWER(email) = ?",
+                passwordHash, AppUser.ADMIN, email.trim().toLowerCase());
+    }
+
     /** Switches an account on or off without deleting it, so its history is kept. */
     public void setActive(String email, boolean active) {
         jdbc.update("UPDATE app_user SET active = ? WHERE LOWER(email) = ?", active, email.trim().toLowerCase());

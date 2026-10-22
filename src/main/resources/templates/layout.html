@@ -56,5 +56,42 @@
     </div>
 </footer>
 
+<!-- Progressive enhancement, and nothing more. Every form here works with JavaScript turned
+     off: this only asks before something destructive and stops an impatient second click
+     sending the same import twice. There is no framework and no external script. -->
+<script>
+    (function () {
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            var question = form.getAttribute('data-confirm');
+            if (question && !window.confirm(question)) {
+                event.preventDefault();
+                return;
+            }
+
+            if (form.dataset.submitted === 'true') {
+                event.preventDefault();
+                return;
+            }
+            form.dataset.submitted = 'true';
+
+            var busy = form.getAttribute('data-busy');
+            var button = form.querySelector('button[type="submit"]');
+            if (busy && button) {
+                // After the current tick: disabling a button during its own submit event
+                // cancels the submission in some browsers.
+                window.setTimeout(function () {
+                    button.disabled = true;
+                    button.textContent = busy;
+                }, 0);
+            }
+        });
+    })();
+</script>
+
 </body>
 </html>

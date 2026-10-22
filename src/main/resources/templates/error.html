@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Something went wrong', 'none', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+        <section class="card empty">
+            <p class="label">EDSA</p>
+            <!-- Spring puts the status on the model as a number, so these compare numerically.
+                 A th:switch with th:case="404" would compare it against the string and quietly
+                 always fall through to the general case. -->
+            <h1 class="empty__title">
+                <span th:if="${status == 404}">That page does not exist</span>
+                <span th:if="${status == 403}">You do not have access to that</span>
+                <span th:unless="${status == 404 or status == 403}">Something went wrong</span>
+            </h1>
+            <p class="empty__note">
+                <span th:if="${status == 404}">
+                    Check the address, or start again from Data and Run.
+                </span>
+                <span th:if="${status == 403}">
+                    Some actions are limited to the examination office. If you think you should be
+                    able to do this, ask them to check your account.
+                </span>
+                <span th:unless="${status == 404 or status == 403}">
+                    The request could not be completed. Nothing has been changed. Try again, and if
+                    it keeps happening tell the examination office what you were doing.
+                </span>
+            </p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

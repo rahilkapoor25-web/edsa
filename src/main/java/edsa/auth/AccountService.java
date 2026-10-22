@@ -45,6 +45,43 @@ public class AccountService {
         users.create(email, encoder.encode(rawPassword), displayName, role, true);
     }
 
+    /** What {@link #provisionAdministrator} had to do. */
+    public enum AdminOutcome {
+        CREATED,
+        PASSWORD_RESET
+    }
+
+    /**
+     * Makes sure the configured administrator exists and can sign in.
+     *
+     * <p>Creating the first account only while the table is completely empty was too strict to
+     * be useful: once any account existed — a professor provisioned from a workbook, say — there
+     * was no way to add an administrator or to recover one whose password had been lost, and
+     * with a database that survives restarts that would be permanent. So this creates the
+     * account when it is missing and otherwise puts the existing one back in working order.
+     *
+     * <p>It stays entirely opt-in. Nothing calls it unless an email and a password were supplied
+     * deliberately, there is no default password, and the documentation says to leave the
+     * settings unset outside a development machine — because anybody who can set them could
+     * take the administrator account over.
+     *
+     * @throws IllegalArgumentException when the address is malformed or the password too short
+     */
+    public AdminOutcome provisionAdministrator(String email, String rawPassword, String displayName) {
+        if (!isWellFormed(email)) {
+            throw new IllegalArgumentException("'" + email + "' is not a valid email address");
+        }
+        if (rawPassword == null || rawPassword.length() < 8) {
+            throw new IllegalArgumentException("the password must be at least 8 characters");
+        }
+        if (users.findByEmail(email).isEmpty()) {
+            users.create(email, encoder.encode(rawPassword), displayName, AppUser.ADMIN, true);
+            return AdminOutcome.CREATED;
+        }
+        users.resetAdministrator(email, encoder.encode(rawPassword));
+        return AdminOutcome.PASSWORD_RESET;
+    }
+
     public Optional<AppUser> find(String email) {
         return users.findByEmail(email);
     }

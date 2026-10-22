@@ -349,4 +349,38 @@ class DisruptionPageTest {
         assertFalse(requests.all().isEmpty(), "only the request made with a token was stored");
         assertEquals(1, requests.all().size());
     }
+
+    /**
+     * Recorded absences outlive a restart, so they must be reviewable even when no plan is
+     * loaded. They used to sit inside the block the page hides when nothing is planned, which
+     * made a pending request invisible until somebody re-imported the session — a problem that
+     * only appeared once the database stopped being wiped on every restart.
+     */
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void aPendingRequestIsStillVisibleWhenNoPlanIsLoaded() throws Exception {
+        LeaveRequest recorded = recordWholeSession(someoneOnDuty());
+        workspace.setData(null);
+
+        mvc.perform(get("/disruption"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("No plan yet")))
+                .andExpect(content().string(containsString("Leave requests")))
+                .andExpect(content().string(containsString("Reported sick")))
+                .andExpect(content().string(containsString("Pending")));
+
+        assertEquals(LeaveStatus.PENDING, requests.find(recorded.id()).orElseThrow().status());
+    }
+
+    @Test
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void aRequestCanBeRejectedWithNoPlanLoaded() throws Exception {
+        LeaveRequest recorded = recordWholeSession(someoneOnDuty());
+        workspace.setData(null);
+
+        mvc.perform(post("/disruption/leave/" + recorded.id() + "/reject").with(csrf()))
+                .andExpect(redirectedUrl("/disruption"));
+
+        assertEquals(LeaveStatus.REJECTED, requests.find(recorded.id()).orElseThrow().status());
+    }
 }
