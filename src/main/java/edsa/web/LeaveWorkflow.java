@@ -8,10 +8,13 @@ import edsa.core.LeaveRequest;
 import edsa.core.LeaveStatus;
 import edsa.core.RepairResult;
 import edsa.core.AbsenceRepairer;
+import edsa.auth.AccountService;
+import edsa.auth.AppUser;
 import edsa.data.LeaveRequestRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,12 +40,24 @@ public class LeaveWorkflow {
     private final LeaveRequestRepository requests;
     private final Workspace workspace;
     private final LeaveProperties properties;
+    private final AccountService accounts;
     private final AbsenceRepairer repairer = new AbsenceRepairer();
 
-    public LeaveWorkflow(LeaveRequestRepository requests, Workspace workspace, LeaveProperties properties) {
+    public LeaveWorkflow(LeaveRequestRepository requests, Workspace workspace,
+                         LeaveProperties properties, AccountService accounts) {
         this.requests = requests;
         this.workspace = workspace;
         this.properties = properties;
+        this.accounts = accounts;
+    }
+
+    /**
+     * Who is asking, as far as recording an absence is concerned.
+     *
+     * <p>Built by the controller from the authenticated request. The email identifies the
+     * account; whether they hold the administrator role decides whose absence they may record.
+     */
+    public record Actor(String email, boolean administrator) {
     }
 
     /** The default review deadline for a request recorded now. */
@@ -56,6 +71,58 @@ public class LeaveWorkflow {
 
     public List<LeaveRequest> awaitingReview() {
         return requests.withStatus(LeaveStatus.PENDING);
+    }
+
+    /**
+     * Records an absence on behalf of whoever is asking.
+     *
+     * <p>This is where a professor is held to their own identity. An administrator is the
+     * examination office and may record an absence for any invigilator, because that is the
+     * job. Anybody else records their own and nobody else's: the faculty record comes from
+     * their signed-in account, so a {@code facultyId} put into the form or the request by hand
+     * is simply not consulted. Changing that field cannot make the request somebody else's.
+     */
+    public LeaveRequest recordAbsence(Actor actor, String requestedFacultyId, AbsenceWindow window,
+                                      String reason, LocalDateTime confirmBy) {
+        return record(subjectFor(actor, requestedFacultyId), window, reason, confirmBy);
+    }
+
+    /**
+     * Whose absence this actor is allowed to record.
+     *
+     * @throws IllegalArgumentException when an administrator named nobody, or when an ordinary
+     *                                 account is not tied to a faculty record and so has no
+     *                                 absence of its own to report
+     */
+    public String subjectFor(Actor actor, String requestedFacultyId) {
+        if (actor != null && actor.administrator()) {
+            if (requestedFacultyId == null || requestedFacultyId.isBlank()) {
+                throw new IllegalArgumentException("Choose the invigilator who is away");
+            }
+            return requestedFacultyId.trim();
+        }
+        return ownFacultyId(actor);
+    }
+
+    /**
+     * The faculty record an account belongs to, when it was provisioned from one.
+     *
+     * <p>Empty for an account made by hand, which is why an administrator records those
+     * absences instead.
+     */
+    public Optional<String> linkedFacultyId(String email) {
+        return accounts.find(email)
+                .map(AppUser::facultyId)
+                .filter(facultyId -> facultyId != null && !facultyId.isBlank());
+    }
+
+    private String ownFacultyId(Actor actor) {
+        if (actor == null || actor.email() == null) {
+            throw new IllegalArgumentException("Sign in to record an absence");
+        }
+        return linkedFacultyId(actor.email()).orElseThrow(() -> new IllegalArgumentException(
+                "Your account is not linked to a faculty record, so it cannot report its own "
+                        + "absence. Ask the examination office to record it for you."));
     }
 
     /**

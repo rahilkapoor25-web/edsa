@@ -85,7 +85,9 @@
             </article>
         </section>
 
-        <div class="columns columns--even">
+        <!-- Changing the data, the mode or the plan is the examination office's job; the server
+             refuses it for anybody else, so a professor is not shown the forms either. -->
+        <div class="columns columns--even" th:if="${canChangeData}">
 
             <section class="panel">
                 <div class="panel__head">
@@ -257,6 +259,36 @@
             </section>
 
         </div>
+
+        <section class="panel" th:if="${hasPlan and !canChangeData}">
+            <div class="panel__head">
+                <h2 class="panel__title">This session</h2>
+                <span class="label" th:text="${mode.label()} + ' · ' + ${mode.durationLabel()}">
+                    Endsem · 3 h</span>
+            </div>
+            <div class="panel__body">
+                <p class="muted">
+                    The examination office sets the data and the mode. Your duties are on
+                    <a th:href="@{/workloads}">Workloads</a>, the seating is on
+                    <a th:href="@{/rooms}">Room schedule</a>, and you can report an absence on
+                    <a th:href="@{/disruption}">Disruption</a>.
+                </p>
+                <div class="actions">
+                    <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
+                    <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
+                    <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
+                    <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="card empty" th:if="${!hasPlan and !canChangeData}">
+            <h2 class="empty__title">Nothing has been planned yet</h2>
+            <p class="empty__note">
+                The examination office has not imported this session's data yet. Once they have,
+                your duties and the seating plan appear here.
+            </p>
+        </section>
 
         <section class="panel" th:if="${hasPlan}">
             <div class="panel__head">

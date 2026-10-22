@@ -18,6 +18,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -34,6 +35,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *
  * <p>The controller reads the request, asks the core or the data layer, and hands the answer
  * to the template. No scheduling or rule logic lives here.
+ *
+ * <p>Everything that <em>changes</em> what is planned is restricted to an administrator: an
+ * import replaces the stored reference data outright, and the mode, the loaded data and the
+ * computed plan are one shared workspace that every signed-in user sees. A professor reads
+ * that workspace and downloads from it, which is what the pages and the exports are for, but
+ * one professor cannot replace the session another is reading. Reading and downloading stay
+ * open to any signed-in account.
  */
 @Controller
 public class DataAndRunController {
@@ -50,7 +58,8 @@ public class DataAndRunController {
     }
 
     @GetMapping("/")
-    public String page(Model model) {
+    public String page(org.springframework.security.core.Authentication authentication, Model model) {
+        model.addAttribute("canChangeData", isAdministrator(authentication));
         model.addAttribute("modes", ExamMode.values());
         model.addAttribute("mode", workspace.mode());
         model.addAttribute("hasData", workspace.hasData());
@@ -82,6 +91,7 @@ public class DataAndRunController {
     }
 
     @PostMapping("/mode")
+    @PreAuthorize("hasRole('ADMIN')")
     public String chooseMode(@RequestParam String mode, RedirectAttributes flash) {
         try {
             workspace.setMode(ExamMode.of(mode));
@@ -92,6 +102,7 @@ public class DataAndRunController {
     }
 
     @PostMapping("/data/workbook")
+    @PreAuthorize("hasRole('ADMIN')")
     public String uploadWorkbook(@RequestParam MultipartFile workbook, RedirectAttributes flash) {
         if (workbook == null || workbook.isEmpty()) {
             flash.addFlashAttribute("error", "Choose an .xlsx workbook to upload");
@@ -114,6 +125,7 @@ public class DataAndRunController {
     }
 
     @PostMapping("/data/stored")
+    @PreAuthorize("hasRole('ADMIN')")
     public String useStoredData(RedirectAttributes flash) {
         if (!repository.hasData()) {
             flash.addFlashAttribute("error", "No workbook has been imported yet");
@@ -124,12 +136,14 @@ public class DataAndRunController {
     }
 
     @PostMapping("/data/sample")
+    @PreAuthorize("hasRole('ADMIN')")
     public String loadSample() {
         workspace.setData(SampleData.load());
         return "redirect:/";
     }
 
     @PostMapping("/data/upload")
+    @PreAuthorize("hasRole('ADMIN')")
     public String uploadCsv(@RequestParam MultipartFile students,
                             @RequestParam MultipartFile rooms,
                             @RequestParam MultipartFile faculty,
@@ -148,6 +162,7 @@ public class DataAndRunController {
     }
 
     @PostMapping("/compute")
+    @PreAuthorize("hasRole('ADMIN')")
     public String compute(RedirectAttributes flash) {
         if (!workspace.hasData()) {
             flash.addFlashAttribute("error", "Load the data first");
@@ -164,6 +179,13 @@ public class DataAndRunController {
                 .contentType(MediaType.valueOf(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(ExcelTemplate.write());
+    }
+
+    /** Whether this account may replace the shared data, the mode or the plan. */
+    private static boolean isAdministrator(org.springframework.security.core.Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
     }
 
     private static Reader contentOf(MultipartFile upload) {

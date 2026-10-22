@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,12 +43,23 @@ public class DisruptionController {
     }
 
     @GetMapping("/disruption")
-    public String page(Model model) {
+    public String page(Authentication authentication, Model model) {
+        LeaveWorkflow.Actor actor = actorOf(authentication);
         model.addAttribute("hasPlan", workspace.hasPlan());
         model.addAttribute("mode", workspace.mode());
         model.addAttribute("now", LocalDateTime.now());
         model.addAttribute("requests", leave.requests());
         model.addAttribute("defaultDeadline", leave.defaultDeadline().withSecond(0).withNano(0));
+
+        // An administrator picks anybody; everybody else may only report their own absence,
+        // so the form shows them who that is rather than a list to choose from.
+        model.addAttribute("canRecordForOthers", actor.administrator());
+        if (!actor.administrator()) {
+            String ownId = leave.linkedFacultyId(actor.email()).orElse(null);
+            model.addAttribute("ownFacultyId", ownId);
+            model.addAttribute("ownFaculty", ownId == null || !workspace.hasData()
+                    ? null : workspace.data().facultyMember(ownId));
+        }
 
         if (workspace.hasPlan()) {
             ExamPlan plan = workspace.result().plan();
@@ -63,20 +76,24 @@ public class DisruptionController {
     /**
      * Records an absence. It changes no duty: it is stored as pending and waits for review.
      *
-     * <p>A professor may report their own absence, which is why this is open to any signed-in
-     * account; deciding it is not.
+     * <p>Open to any signed-in account because a professor may report their own absence;
+     * deciding it is not. Whose absence it is comes from the signed-in account rather than
+     * from {@code facultyId}, which only an administrator is allowed to set — see
+     * {@link LeaveWorkflow#subjectFor}.
      */
     @PostMapping("/disruption/leave")
-    public String recordLeave(@RequestParam String facultyId,
+    public String recordLeave(@RequestParam(required = false) String facultyId,
                               @RequestParam(required = false) String from,
                               @RequestParam(required = false) String to,
                               @RequestParam(required = false) String wholeSession,
                               @RequestParam(required = false) String reason,
                               @RequestParam(required = false) String confirmBy,
+                              Authentication authentication,
                               RedirectAttributes flash) {
         try {
             AbsenceWindow window = windowOf(from, to, wholeSession);
-            LeaveRequest recorded = leave.record(facultyId, window, reason, moment(confirmBy, "confirmation deadline"));
+            LeaveRequest recorded = leave.recordAbsence(actorOf(authentication), facultyId, window,
+                    reason, moment(confirmBy, "confirmation deadline"));
             flash.addFlashAttribute("notice", "Recorded " + recorded.facultyName() + "'s absence for "
                     + window.describe() + ". It changes nothing until it is confirmed.");
         } catch (IllegalArgumentException e) {
@@ -111,6 +128,17 @@ public class DisruptionController {
             flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/disruption";
+    }
+
+    /** Who is signed in, and whether they are the examination office. */
+    private static LeaveWorkflow.Actor actorOf(Authentication authentication) {
+        if (authentication == null) {
+            return new LeaveWorkflow.Actor(null, false);
+        }
+        boolean administrator = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
+        return new LeaveWorkflow.Actor(authentication.getName(), administrator);
     }
 
     /** The absence the form describes: the whole session, or one explicit interval. */

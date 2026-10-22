@@ -34,7 +34,10 @@
                 </div>
                 <div class="panel__body">
                     <form method="post" th:action="@{/disruption/leave}">
-                        <div class="field">
+                        <!-- The examination office records anybody's absence. Everybody else
+                             records their own, and the server takes that identity from the
+                             signed-in account rather than from this form. -->
+                        <div class="field" th:if="${canRecordForOthers}">
                             <label class="label" for="facultyId">Invigilator</label>
                             <select class="input select" id="facultyId" name="facultyId" required>
                                 <option th:each="workload : ${workloads}"
@@ -42,6 +45,21 @@
                                         th:text="${workload.member().getName()} + ' (' + ${workload.member().getId()}
                                                  + ') — ' + ${workload.duties()} + ' duties'">Dr Name (F01) — 2 duties</option>
                             </select>
+                        </div>
+
+                        <div class="field" th:unless="${canRecordForOthers}">
+                            <span class="label">Invigilator</span>
+                            <p class="mono" th:if="${ownFaculty}">
+                                <span th:text="${ownFaculty.getName()}">Dr Name</span>
+                                <span class="code" th:text="${ownFacultyId}">F01</span>
+                            </p>
+                            <p class="leave-reason" th:if="${ownFaculty}">
+                                You are reporting your own absence.
+                            </p>
+                            <p class="notice notice--error" th:unless="${ownFaculty}">
+                                Your account is not linked to a faculty record, so it cannot report its
+                                own absence. Ask the examination office to record it for you.
+                            </p>
                         </div>
                         <div class="field">
                             <label class="label" for="from">Away from</label>
@@ -73,13 +91,15 @@
                             <input class="input mono" type="datetime-local" id="confirmBy" name="confirmBy"
                                    th:value="${defaultDeadline}">
                         </div>
-                        <button class="button button--full" type="submit">Record the absence</button>
+                        <button class="button button--full" type="submit"
+                                th:if="${canRecordForOthers or ownFaculty != null}">Record the absence</button>
                     </form>
                     <p class="muted">
                         Recording an absence changes nothing on its own. An administrator confirms or
                         rejects it, and only a confirmation moves a duty: each affected room is then
                         offered to the least-loaded colleague who is free at that time. Seating is never
-                        touched.
+                        touched.<span th:unless="${canRecordForOthers}"> Only the examination office can
+                        record an absence for somebody else.</span>
                     </p>
                 </div>
             </section>

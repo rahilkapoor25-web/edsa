@@ -37,7 +37,7 @@ class ExamWorkflowTest {
     private Workspace workspace;
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void theDataPageOffersEveryModeWithItsDuration() throws Exception {
         mvc.perform(get("/"))
                 .andExpect(status().isOk())
@@ -48,7 +48,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void loadingDataSchedulesItStraightAway() throws Exception {
         mvc.perform(post("/data/sample").with(csrf())).andExpect(redirectedUrl("/"));
 
@@ -57,7 +57,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void choosingAModeRetimesTheTimetableImmediately() throws Exception {
         mvc.perform(post("/data/sample").with(csrf())).andExpect(redirectedUrl("/"));
 
@@ -72,7 +72,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void aStateChangingPostWithoutACsrfTokenIsRejected() throws Exception {
         mvc.perform(post("/data/sample")).andExpect(status().isForbidden());
         mvc.perform(post("/compute")).andExpect(status().isForbidden());
@@ -80,7 +80,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void theTemplateDownloadsAsAnXlsxWorkbook() throws Exception {
         mvc.perform(get("/import-template.xlsx"))
                 .andExpect(status().isOk())
@@ -91,7 +91,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void uploadingAWorkbookThroughThePageImportsIt() throws Exception {
         byte[] workbook = edsa.data.ExcelTemplate.write();
         MockMultipartFile upload = new MockMultipartFile("workbook", "session.xlsx",
@@ -105,7 +105,7 @@ class ExamWorkflowTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@thapar.edu")
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
     void theRoomScheduleAndWorkloadPagesOpenBeforeAnythingIsComputed() throws Exception {
         mvc.perform(get("/rooms")).andExpect(status().isOk());
         mvc.perform(get("/workloads")).andExpect(status().isOk());

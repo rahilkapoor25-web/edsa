@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -72,9 +73,16 @@ class DisruptionPageTest {
                 .map(Assignment::slotId).sorted().toList();
     }
 
-    /** Records an absence for the whole session and returns the stored request. */
+    /**
+     * Records an absence for the whole session and returns the stored request.
+     *
+     * <p>Recorded as the examination office, which is the only role that may record an absence
+     * for somebody else. Whose absence an account may record is covered on its own in
+     * {@link LeaveIdentityTest}; these tests are about what happens to it afterwards.
+     */
     private LeaveRequest recordWholeSession(String facultyId) throws Exception {
         mvc.perform(post("/disruption/leave").with(csrf())
+                        .with(user("boss@thapar.edu").roles("ADMIN"))
                         .param("facultyId", facultyId)
                         .param("wholeSession", "yes")
                         .param("reason", "Reported sick"))
@@ -85,13 +93,24 @@ class DisruptionPageTest {
     // ── The page ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    @WithMockUser(username = "prof@thapar.edu")
-    void thePageListsEveryInvigilatorWithTheirDutyCount() throws Exception {
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
+    void theOfficeSeesEveryInvigilatorWithTheirDutyCount() throws Exception {
         mvc.perform(get("/disruption"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Disruption")))
                 .andExpect(content().string(containsString("duties")))
                 .andExpect(content().string(containsString("Report an absence")));
+    }
+
+    @Test
+    @WithMockUser(username = "prof@thapar.edu")
+    void aProfessorIsNotOfferedTheWholeRosterToChooseFrom() throws Exception {
+        mvc.perform(get("/disruption"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Report an absence")))
+                // The field that picks somebody else must not be on their page at all.
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        containsString("name=\"facultyId\""))));
     }
 
     // ── Recording changes nothing ─────────────────────────────────────────────────────────
@@ -133,7 +152,7 @@ class DisruptionPageTest {
     }
 
     @Test
-    @WithMockUser(username = "prof@thapar.edu")
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void anAbsenceForAnUnknownInvigilatorIsRefused() throws Exception {
         mvc.perform(post("/disruption/leave").with(csrf())
                         .param("facultyId", "NOBODY").param("wholeSession", "yes"))
@@ -143,7 +162,7 @@ class DisruptionPageTest {
     }
 
     @Test
-    @WithMockUser(username = "prof@thapar.edu")
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void anAbsenceWithNoPeriodIsRefused() throws Exception {
         mvc.perform(post("/disruption/leave").with(csrf()).param("facultyId", someoneOnDuty()))
                 .andExpect(redirectedUrl("/disruption"));
@@ -152,7 +171,7 @@ class DisruptionPageTest {
     }
 
     @Test
-    @WithMockUser(username = "prof@thapar.edu")
+    @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void anUnparseableAbsencePeriodIsRefused() throws Exception {
         mvc.perform(post("/disruption/leave").with(csrf())
                         .param("facultyId", someoneOnDuty())
@@ -277,7 +296,7 @@ class DisruptionPageTest {
 
     @Test
     @WithMockUser(username = "prof@thapar.edu")
-    void aProfessorMayRecordAnAbsenceButNotConfirmOne() throws Exception {
+    void aProfessorCannotConfirmARecordedAbsence() throws Exception {
         String away = someoneOnDuty();
         List<String> before = dutiesOf(away);
         LeaveRequest recorded = recordWholeSession(away);
@@ -286,7 +305,7 @@ class DisruptionPageTest {
                 .andExpect(status().isForbidden());
 
         assertEquals(LeaveStatus.PENDING, requests.find(recorded.id()).orElseThrow().status());
-        assertEquals(before, dutiesOf(away), "a professor cannot move duties by confirming their own leave");
+        assertEquals(before, dutiesOf(away), "a professor cannot move duties by confirming leave");
     }
 
     @Test
@@ -318,7 +337,8 @@ class DisruptionPageTest {
         String away = someoneOnDuty();
         List<String> before = dutiesOf(away);
 
-        mvc.perform(post("/disruption/leave").param("facultyId", away).param("wholeSession", "yes"))
+        mvc.perform(post("/disruption/leave").with(user("boss@thapar.edu").roles("ADMIN"))
+                        .param("facultyId", away).param("wholeSession", "yes"))
                 .andExpect(status().isForbidden());
         LeaveRequest recorded = recordWholeSession(away);
         mvc.perform(post("/disruption/leave/" + recorded.id() + "/confirm"))
