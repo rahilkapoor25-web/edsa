@@ -7,11 +7,15 @@ timetable — into a complete exam seating plan and invigilation duty roster tha
 every rule the examination office follows. The coordinator uploads the CSVs, clicks once,
 and gets a plan back.
 
-Five pages: **Import** (upload the four CSVs, show row counts and malformed-row warnings),
+Nine pages. The original five: **Import** (upload the four CSVs, show row counts and malformed-row warnings),
 **Solve** (start the run, show progress and the violation count falling to zero),
 **Plan viewer** (seating and duty tables, filter by room or date), **Disruption** (mark a
 faculty member absent, show a diff of what the repairer changed), **Reports** (preview and
-download seating charts, attendance sheets, workload summary).
+download seating charts, attendance sheets, workload summary). And four more, for running the session
+rather than computing it: **Duties** (review and approve who invigilates where, with the fairness
+figures), **Timings** (re-time a paper or a whole day, with a conflict review and an audit history),
+**Substitutions** (offer a duty, cover a colleague's, have it approved and confirmed) and **Points**
+(what covering duties has earned, and spending it on an exemption).
 
 Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 
@@ -34,7 +38,11 @@ Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 
 **Not used:** no ORM — no Hibernate, no JPA, no `spring-boot-starter-data-jpa`. Database
 access is written directly in JDBC, including the account and import tables. The schema lives
-in `src/main/resources/db/schema.sql` and is applied on start-up.
+in `src/main/resources/db/schema.sql` and is applied on start-up; later columns and tables are added
+with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` and `CREATE TABLE IF NOT EXISTS`, so a database that
+already holds data keeps it. Beyond the accounts and imported records it holds `duty_decision`
+(approvals), `exam_time_override` and the append-only `exam_time_change`, `substitution_request`,
+the append-only `points_transaction`, and `duty_redemption`.
 
 The database is H2 in-memory today (`src/main/resources/application.properties`) and moves
 to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
@@ -87,7 +95,11 @@ a plan is scored belongs in `edsa.core` — even a single `if` about capacity or
 - *The things:* `Student`, `Faculty`, `Room`, `ExamSlot`, `Seat`, `SeatingPlan`, `DutyRoster`,
   `Assignment`, `WorkloadLedger`, and `Person` as a shared parent of `Student` and `Faculty`.
   Plus, for absences: `AbsenceWindow` (an interval somebody is away), `Absence`, `LeaveRequest`
-  and `LeaveStatus`.
+  and `LeaveStatus`. For seniority: `Designation`, `SeniorityLadder`, `DutyPolicy`, `DutyEligibility`,
+  `LeaveCalendar`, `DutyOrigin` and `DutyDecision`. For timing: `TimingOverride`, `TimingOverrides`,
+  `TimingValidator` and `TimingReview`. For rewards: `RewardRules`, `PointsKind`, `PointsEntry`,
+  `PointsBalance`, `SubstitutionStatus`, `SubstitutionRequest`, `RedemptionStatus`, `DutyRedemption`,
+  `DutyRelief` and `ReliefDecision`.
 - *The rules:* a `Constraint` interface, split into hard and soft, with one class per rule and
   a `PlanChecker` that runs them all and lists what is broken.
 - *The decisions:* `TimetableScheduler` places the papers, `GreedyAllocator` seats and staffs
@@ -104,7 +116,9 @@ database, saves and reloads finished plans, keeps a log of what the coordinator 
 is reported with the file name and line number rather than skipped quietly. Also stores the
 recorded absences (`LeaveRequestRepository`) and reads the imported faculty back out with
 their contact details (`ExamDataRepository.facultyContacts()`, `FacultyContact`) for the
-Accounts page to provision from.
+Accounts page to provision from. The newer repositories are `DutyDecisionRepository`,
+`TimingRepository` (with `TimingChange`), `SubstitutionRepository`, `PointsRepository` and
+`RedemptionRepository`.
 
 **`edsa.web` — the five pages**
 
@@ -115,7 +129,11 @@ never sits waiting for the solver.
 Built so far: **Data and Run** (`/`) imports the workbook, picks the mode and lists every rule
 with pass/fail and a breach count; **Room schedule** (`/rooms`) shows the sittings as one
 table, with seat-by-seat grids once a room is chosen; **Workloads** (`/workloads`) shows duties
-per invigilator; **Disruption** (`/disruption`) records an absence, has it confirmed or rejected, and shows the diff;
+per invigilator; **Duties** (`/duties`) reviews, adjusts and approves the allocation and shows the
+fairness figures; **Timings** (`/timings`, coordinators and administrators) re-times papers with a
+conflict review and an audit history; **Substitutions** (`/substitutions`) is the board where a duty
+is offered, taken, approved and confirmed done; **Points** (`/points`) shows balances, the ledger and
+exemption requests; **Disruption** (`/disruption`) records an absence, has it confirmed or rejected, and shows the diff;
 **Accounts** (`/users`, administrators only) creates and disables accounts. Downloads:
 `/exam-plan.xlsx` (Timetable, Seating and Duties sheets), `/seating-plan.csv`, and
 `/import-template.xlsx`. `Workspace` holds the loaded data, the chosen mode, the computed plan
@@ -185,6 +203,14 @@ of redirecting). Provisioning runs in one transaction, so a failure leaves no ha
 batch, and an account that already exists is skipped with its password, role and faculty
 mapping untouched.
 
+**Three roles.** `ADMIN` may do everything, including creating accounts and approving the
+substitutions and exemptions that move points. `COORDINATOR` may run the timetable — change exam
+timings, review and approve the duty allocation — and nothing else, so an office can let somebody
+run the session without also letting them create accounts. `PROFESSOR` may offer their own duties,
+volunteer for other people's, and spend their own points. Every one of those checks is made again
+in the service that performs the action, against the faculty record the account is tied to, so a
+route reached by hand is refused exactly as a hidden button would have been.
+
 Authentication is kept clear of allocation: nothing in `edsa.core` knows accounts exist.
 `edsa.auth` may use `edsa.data` (it reads the imported faculty records); nothing imports
 `edsa.auth` except `edsa.web`, so the arrows still point one way:
@@ -228,10 +254,102 @@ nothing else may use that student, room or invigilator at 10:00, but a sitting m
 Anything that cannot be placed is reported with its reason (`PlanningResult.problems()`) and
 the plan is not presented as a timetable — `isUsable()` is what the pages ask.
 
+## Seniority and how duties are shared out
+
+**None of this is anybody's policy.** `SeniorityLadder` holds whichever ranks an examination
+office has configured, each a `Designation` with a seniority position and a **duty share** — the
+fraction of an equal workload that rank is expected to carry. The default ladder lists the ranks
+named in Thapar's published Recruitment & Promotion Policy 2020 (Professor, Associate Professor,
+Assistant Professor III/II/I, Lecturer); **the shares beside them are this application's own
+starting point and no institution's rule.** There is no "Senior Professor" because no published
+source confirms one. Change them in `edsa.duties.ranks[*]`, not in the solver.
+
+**A designation is a default, not an authority.** A faculty record may carry an explicit
+`Seniority` value, and where it does it wins: length of service or an administrative role can
+place somebody differently from their title.
+
+`DutyEligibility` answers two questions and the allocator asks nothing else. *May this person take
+this duty?* — no if they are already invigilating then, on confirmed leave, at the configured cap,
+excused by rank, or teaching that paper (`edsa.duties.course-teacher-may-invigilate`). The answer
+is a **reason in words**, not a boolean, so an unstaffed room is reported as "F01 teaches CS301"
+rather than "nobody was free". And *who is least loaded?* — duties divided by expected share, so
+asking half as much of a professor does not land the difference on one colleague. At equal load the
+tie breaks on share before id, which is what makes weighting bite in the first room rather than only
+the second.
+
+**Recommended is not approved.** Every `Assignment` carries a `DutyOrigin`. The allocator produces
+`RECOMMENDED`; a coordinator's decision is stored in `duty_decision` and re-applied after every
+compute, so reloading the workbook refreshes the recommendations without discarding anybody's
+approvals. Nothing hand-assigned may break a rule the core would catch.
+
+## Changing when papers run
+
+The mode is still the authority on duration **for the workbook**: a `Duration Minutes` value cannot
+stretch a Quiz, and that bug stays fixed. A length an authorised person sets through `/timings` is a
+different thing and takes a different path — `ExamMode.minutesForApproved`, bounded between
+`MIN_APPROVED_MINUTES` and `MAX_OVERRIDE_MINUTES`. The distinction is the rule's reason, not a
+loophole in it: a workbook cell is untrusted input of unknown age and authorship, while a change
+made here is attributable, reviewed against the plan it would break, and written to an append-only
+audit history. The importer can never reach that path.
+
+**Saving is two steps.** `TimingValidator` applies the proposal to a copy of the data, plans it with
+the real engine, and reports what is *newly* wrong — it does not reimplement clash detection, because
+a second parallel set of those checks would eventually disagree with the plan it was warning about.
+A **blocker** (a length no mode accepts, a sitting running past closing) cannot be confirmed past. A
+**warning** (a student with two papers, a room short of seats, no invigilator free) is the office's
+call, and the warnings they saw are written into `exam_time_change` with the change, because "did
+they know?" is the first question anybody asks about a timetable with a clash in it.
+
+Overrides live in `exam_time_override` and are applied to the `ExamData` *before* planning, so one
+change reaches the timetable, the room allocation, the seating plan and every download together.
+Moving a whole day is all-or-nothing: a half-moved day is worse than an unmoved one.
+
+## Substitute duties and reward points
+
+Professor A cannot attend; Professor B covers it and earns credit. The lifecycle is `OFFERED` →
+`CLAIMED` → `APPROVED` → `COMPLETED`, with `REJECTED`, `WITHDRAWN` and `EXPIRED` as the ways it ends
+early, and **points are awarded at `COMPLETED` and nowhere else** — approval is agreement to turn up,
+not having turned up.
+
+Four protections, each closing a way the scheme could be gamed, and each enforced by the database
+and not only by the service:
+
+- **No covering your own duty** — a `CHECK` constraint, as well as the code.
+- **One open offer per sitting** — a computed `open_sitting` key that is only set while the offer is
+  open, which is how H2 expresses a partial unique index.
+- **One award per substitution** — `UNIQUE (substitution_id, kind)`, which is what actually stops two
+  administrators completing the same substitution at once.
+- **Nobody decides a case they are party to** — checked against the account's *faculty id*, not its
+  role, because an administrator is also a colleague who can be short of points.
+
+Every state change is a conditional update (`SET status = ? WHERE id = ? AND status = ?`) and the
+caller is told how many rows it touched, so the second of two simultaneous volunteers is told the
+duty has gone rather than quietly overwriting the first.
+
+**The ledger is append-only and there is no balance column.** A balance is the sum of its rows, a
+correction is another row, and the history therefore always explains the balance it produces.
+Four figures are shown because they answer different questions: earned, redeemed, expired, and
+**available** — which is not earned minus redeemed, because points committed to an undecided request
+are *held*. Without that hold the same thirty points would buy three exemptions.
+
+**Credits can never leave a room unstaffed.** `DutyRelief` grants an exemption only when a *named*
+colleague is eligible to take the room and letting somebody off would not take them below
+`edsa.duties.min-per-member`. "Somebody will cover it" is how an examination hall ends up with nobody
+in it, so the stand-in is found rather than assumed, and the whole check runs again at the moment of
+approval because who is free changes between asking and deciding. A grant that can no longer be made
+leaves the request pending rather than being silently rejected — who is free may change again.
+
+The defaults charge three covers for one exemption (`edsa.rewards.*`). A scheme that paid out as
+much as it charged would be a way of doing a third of the work rather than a reward for doing more
+than your share.
+
 ## Importing data
 
 The primary workflow is one `.xlsx` workbook with six worksheets — Students, Faculty, Rooms,
-Subjects, Enrollments, Exams — read by `ExcelWorkbookReader` (Apache POI). Every value is
+Subjects, Enrollments, Exams — read by `ExcelWorkbookReader` (Apache POI). The Faculty worksheet's
+optional `Designation` and `Seniority` columns feed the ladder above; an unrecognised designation is
+imported and reported on the Duties page rather than rejected, because imported data is never as tidy
+as a configuration file. Every value is
 treated as untrusted text: formulas are refused rather than evaluated, and a bad cell is
 reported as `Worksheet 'Rooms', row 3, column 'Capacity': ...`. Parsing finishes before
 anything is written and `WorkbookImportService` writes in one transaction, so a rejected

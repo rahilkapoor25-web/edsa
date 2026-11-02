@@ -3,9 +3,11 @@ package edsa.core;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -18,13 +20,31 @@ import java.util.Set;
  * <p>Conflicts are tracked as the plan is built — which papers each student sits, which
  * sittings each invigilator covers — so placing a seat costs the same whether the session has
  * four rooms or forty. {@link PlanChecker} then proves the finished plan independently.
+ *
+ * <p>Who counts as least loaded depends on the {@link DutyPolicy} in force. Unweighted, it is
+ * whoever has fewest duties, which is what this did before any ladder existed. Weighted, it is
+ * whoever is furthest below the share their rank is expected to carry, so that asking less of
+ * senior staff does not quietly mean asking twice as much of everybody else. Members who cannot
+ * take a duty are passed over with a reason rather than silently skipped, because an unstaffed
+ * room is the one outcome a coordinator must be able to explain.
  */
 public final class GreedyAllocator {
 
     private final SchedulingConfig config;
+    private final DutyEligibility eligibility;
 
+    /**
+     * Allocates under the default scheduling limits and the unweighted duty policy, which is
+     * how this behaved before seniority existed. The pages pass a configured policy instead.
+     */
     public GreedyAllocator(SchedulingConfig config) {
+        this(config, new DutyEligibility(SeniorityLadder.defaults(), DutyPolicy.unweighted(),
+                LeaveCalendar.empty()));
+    }
+
+    public GreedyAllocator(SchedulingConfig config, DutyEligibility eligibility) {
         this.config = config;
+        this.eligibility = eligibility;
     }
 
     public GreedyAllocator() {
@@ -108,12 +128,17 @@ public final class GreedyAllocator {
                        WorkloadLedger ledger, Map<String, List<ExamSlot>> facultyDuties, List<String> problems) {
         for (String roomId : roomsUsed) {
             Faculty chosen = null;
-            for (Faculty candidate : leastLoadedFirst(data.faculty(), ledger)) {
+            Map<String, String> refused = new LinkedHashMap<>();
+
+            for (Faculty candidate : leastLoadedFirst(data.faculty(), ledger, slot, data)) {
                 List<ExamSlot> covered = facultyDuties.computeIfAbsent(candidate.getId(), key -> new ArrayList<>());
-                if (covered.stream().anyMatch(slot::overlaps)) {
+                Optional<String> refusal = eligibility.refusal(candidate, slot, covered,
+                        ledger.dutiesFor(candidate.getId()));
+                if (refusal.isPresent()) {
+                    refused.put(candidate.getId(), refusal.get());
                     continue;
                 }
-                duties.assign(new Assignment(slot.getId(), roomId, candidate.getId()));
+                duties.assign(new Assignment(slot.getId(), roomId, candidate.getId(), DutyOrigin.RECOMMENDED));
                 covered.add(slot);
                 ledger.record(candidate.getId());
                 chosen = candidate;
@@ -121,16 +146,67 @@ public final class GreedyAllocator {
             }
             if (chosen == null) {
                 problems.add("No invigilator is free for room " + roomId + " during " + slot.getPaperCode()
-                        + " (" + slot.getStartTime() + "-" + slot.getEndTime() + " on " + slot.getDate() + ")");
+                        + " (" + slot.getStartTime() + "-" + slot.getEndTime() + " on " + slot.getDate() + ")"
+                        + whyNot(refused));
             }
         }
     }
 
-    /** Spreads duties as the plan is built, and breaks ties by id so runs are repeatable. */
-    private static List<Faculty> leastLoadedFirst(List<Faculty> faculty, WorkloadLedger ledger) {
-        return faculty.stream()
-                .sorted(Comparator.comparingInt((Faculty member) -> ledger.dutiesFor(member.getId()))
-                        .thenComparing(Faculty::getId))
+    /**
+     * The refusals behind an unstaffed room, so the problem says what to change.
+     *
+     * <p>Only a handful are listed: a coordinator reading that forty colleagues were each busy
+     * learns no more than from reading three, and the whole list would bury the message.
+     */
+    private static String whyNot(Map<String, String> refused) {
+        if (refused.isEmpty()) {
+            return ": there are no faculty records to draw on";
+        }
+        List<String> first = refused.entrySet().stream()
+                .limit(3)
+                .map(entry -> entry.getKey() + " " + entry.getValue())
                 .toList();
+        String more = refused.size() > first.size() ? ", and " + (refused.size() - first.size()) + " more" : "";
+        return ": " + String.join("; ", first) + more;
+    }
+
+    /**
+     * Spreads duties as the plan is built, and breaks ties by id so runs are repeatable.
+     *
+     * <p>Department is only a tie-break, and only when the policy asks for it: preferring the
+     * paper's own department ahead of load would undo the spreading this sort exists for.
+     */
+    private List<Faculty> leastLoadedFirst(List<Faculty> faculty, WorkloadLedger ledger,
+                                           ExamSlot slot, ExamData data) {
+        String paperDepartment = departmentOf(slot, data);
+        Comparator<Faculty> order = eligibility.leastLoadedFirst(
+                member -> ledger.dutiesFor(member.getId()));
+        if (eligibility.policy().preferOwnDepartment() && paperDepartment != null) {
+            // Inserted ahead of the id tie-break but behind load and share, so preferring a
+            // department never outweighs spreading the work.
+            order = Comparator
+                    .comparingDouble((Faculty member) ->
+                            eligibility.relativeLoad(member, ledger.dutiesFor(member.getId())))
+                    .thenComparingDouble(member -> -eligibility.expectedShareOf(member))
+                    .thenComparing(member -> paperDepartment.equalsIgnoreCase(member.getDepartment()) ? 0 : 1)
+                    .thenComparing(Faculty::getId);
+        }
+        return faculty.stream().sorted(order).toList();
+    }
+
+    /**
+     * The department a paper belongs to, taken from whoever is sitting it.
+     *
+     * <p>The exam data carries no department of its own for a paper — only students and faculty
+     * have one — so the cohort stands in for it. For a paper sat by one cohort that is exactly
+     * right, and for a shared paper it picks one of the departments involved, which is good
+     * enough for a tie-break and would not be for a rule.
+     */
+    private static String departmentOf(ExamSlot slot, ExamData data) {
+        return data.studentsFor(slot.getPaperCode()).stream()
+                .map(Student::getDepartment)
+                .filter(department -> department != null && !department.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 }

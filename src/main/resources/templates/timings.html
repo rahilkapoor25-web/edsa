@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Timings', 'timings', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Examination timing</p>
+                <h1 class="page__title">When papers run</h1>
+            </div>
+            <p class="page__aside" th:if="${hasData}">
+                <span th:text="${mode.label()}">Endsem</span> ·
+                hall open <span class="mono" th:text="${dayStart} + '–' + ${dayEnd}">09:00–18:00</span>
+            </p>
+        </div>
+
+        <p class="notice" th:if="${notice}" th:text="${notice}">Saved.</p>
+        <p class="field__error" th:if="${error}" th:text="${error}">That change cannot be made.</p>
+
+        <section class="card empty" th:unless="${hasData}">
+            <h2 class="empty__title">Nothing to re-time</h2>
+            <p class="empty__note">Import the workbook first; its papers then appear here to move.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <div th:if="${hasData}">
+
+            <!-- The review of a proposed change, shown before anything is written. Blockers
+                 cannot be confirmed past; warnings can, with one more explicit click. -->
+            <section class="panel" th:if="${review}">
+                <div class="panel__head">
+                    <h2 class="panel__title">What this change would do</h2>
+                    <span class="badge badge--fail" th:if="${review.isBlocked()}">Cannot be saved</span>
+                    <span class="badge badge--wait" th:if="${!review.isBlocked() and review.hasWarnings()}">
+                        Needs confirming
+                    </span>
+                    <span class="badge badge--pass" th:if="${review.isClean()}">No conflicts</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        <span class="code" th:text="${reviewedExamId}">E3</span>
+                        would become
+                        <strong th:text="${proposal.describe(mode)}">2026-11-10 14:00 for 3 h</strong>.
+                    </p>
+
+                    <ul class="problems-block" th:if="${review.isBlocked()}">
+                        <li th:each="blocker : ${review.blockers()}" th:text="${blocker}">
+                            It would finish after the hall closes.
+                        </li>
+                    </ul>
+
+                    <ul class="problems-block" th:if="${review.hasWarnings()}">
+                        <li th:each="warning : ${review.warnings()}" th:text="${warning}">
+                            Student S012 is already sitting another paper then.
+                        </li>
+                    </ul>
+
+                    <p class="muted" th:if="${review.isClean()}">
+                        Nothing in the plan breaks. Save it with the form below.
+                    </p>
+
+                    <form method="post" th:action="@{/timings/save}" th:if="${review.hasWarnings()}"
+                          data-confirm="Save this change even though it creates the conflicts listed above?">
+                        <input type="hidden" name="examId" th:value="${proposal.examId()}">
+                        <input type="hidden" name="date" th:value="${proposal.date()}">
+                        <input type="hidden" name="start" th:value="${proposal.start()}">
+                        <input type="hidden" name="minutes" th:value="${proposal.minutes()}">
+                        <input type="hidden" name="acceptWarnings" value="true">
+                        <button class="button" type="submit">Save anyway, and record the warnings</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="panel" th:if="${sessionShift}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Moving the whole day</h2>
+                    <span class="badge badge--fail" th:if="${not #lists.isEmpty(sessionShift.blockers())}">
+                        Cannot be saved
+                    </span>
+                    <span class="badge badge--wait" th:if="${#lists.isEmpty(sessionShift.blockers())}">
+                        Needs confirming
+                    </span>
+                </div>
+                <div class="panel__body">
+                    <ul class="problems-block" th:if="${not #lists.isEmpty(sessionShift.blockers())}">
+                        <li th:each="blocker : ${sessionShift.blockers()}" th:text="${blocker}">
+                            CS303: it would finish after the hall closes.
+                        </li>
+                    </ul>
+                    <ul class="problems-block" th:if="${not #lists.isEmpty(sessionShift.warnings())}">
+                        <li th:each="warning : ${sessionShift.warnings()}" th:text="${warning}">
+                            CS303: no invigilator is free then.
+                        </li>
+                    </ul>
+                    <form method="post" th:action="@{/timings/session}"
+                          th:if="${#lists.isEmpty(sessionShift.blockers())}"
+                          data-confirm="Move every paper on this date despite the warnings above?">
+                        <input type="hidden" name="date" th:value="${sessionDate}">
+                        <input type="hidden" name="start" th:value="${sessionStart}">
+                        <input type="hidden" name="minutes" th:value="${sessionMinutes}">
+                        <input type="hidden" name="acceptWarnings" value="true">
+                        <button class="button" type="submit">Move the day anyway</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Papers</h2>
+                    <span class="label">Declared, and as they now run</span>
+                </div>
+                <div class="panel__body">
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>As declared</th>
+                                <th>Now</th>
+                                <th>Timing</th>
+                                <th class="is-controls">Change it</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="paper : ${papers}">
+                                <td class="is-primary">
+                                    <span class="code" th:text="${paper.paperCode()}">CS303</span>
+                                    <span class="muted" th:text="${paper.paperName()}">Operating Systems</span>
+                                </td>
+                                <td class="muted" th:text="${paper.declaredSummary()}">2026-11-10 09:00 for 3 h</td>
+                                <td th:text="${paper.currentSummary()}">2026-11-10 14:00 for 3 h</td>
+                                <td>
+                                    <span class="badge badge--wait" th:if="${paper.overridden()}">Re-timed</span>
+                                    <span class="badge badge--muted" th:unless="${paper.overridden()}">As declared</span>
+                                </td>
+                                <td class="is-controls">
+                                    <form class="inline-form" method="post" th:action="@{/timings/review}">
+                                        <input type="hidden" name="examId" th:value="${paper.examId()}">
+                                        <input class="input input--tiny" type="date" name="date"
+                                               th:value="${paper.date()}" aria-label="New date">
+                                        <input class="input input--tiny mono" type="time" name="start"
+                                               th:value="${paper.start()}" aria-label="New start time">
+                                        <input class="input input--tiny mono" type="number" name="minutes"
+                                               th:value="${paper.minutes()}" th:min="${minMinutes}"
+                                               th:max="${maxMinutes}" aria-label="Minutes">
+                                        <button class="button button--quiet button--small" type="submit">Review</button>
+                                    </form>
+                                    <form method="post" th:action="@{/timings/revert}" th:if="${paper.overridden()}"
+                                          data-confirm="Put this paper back on its declared timing?">
+                                        <input type="hidden" name="examId" th:value="${paper.examId()}">
+                                        <button class="button button--quiet button--small" type="submit">Revert</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="panel__footnote">
+                        A sitting must run between <span class="mono" th:text="${minMinutes}">5</span> and
+                        <span class="mono" th:text="${maxMinutes}">300</span> minutes and finish before the
+                        hall closes. The mode's own length applies to any paper nobody has re-timed, so a
+                        <span class="code">Duration Minutes</span> column left in the workbook still changes
+                        nothing by itself.
+                    </p>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Move a whole day</h2>
+                    <span class="label">Every paper on one date</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        All or nothing: if one paper on the date cannot be moved, none of them are. A
+                        half-moved day is worse than an unmoved one, because nobody can tell by looking
+                        which papers were meant to move.
+                    </p>
+                    <form class="filter" method="post" th:action="@{/timings/session}">
+                        <div class="filter__field">
+                            <label class="label" for="sessionDate">Date</label>
+                            <select class="input select" id="sessionDate" name="date" required>
+                                <option th:each="day : ${dates}" th:value="${day}" th:text="${day}">2026-11-10</option>
+                            </select>
+                        </div>
+                        <div class="filter__field">
+                            <label class="label" for="sessionStart">New start</label>
+                            <input class="input mono" type="time" id="sessionStart" name="start">
+                        </div>
+                        <div class="filter__field">
+                            <label class="label" for="sessionMinutes">New length (minutes)</label>
+                            <input class="input mono" type="number" id="sessionMinutes" name="minutes"
+                                   th:min="${minMinutes}" th:max="${maxMinutes}" placeholder="leave blank to keep">
+                        </div>
+                        <div class="filter__actions">
+                            <button class="button" type="submit">Review the day</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Audit history</h2>
+                    <span class="label">Most recent first</span>
+                </div>
+                <div class="panel__body">
+                    <p class="panel__note" th:if="${#lists.isEmpty(history)}">
+                        No timing has been changed yet.
+                    </p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(history)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Paper</th>
+                                <th>Was</th>
+                                <th>Became</th>
+                                <th>Scope</th>
+                                <th>By</th>
+                                <th>Warnings at the time</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="change : ${history}">
+                                <td class="mono" th:text="${#temporals.format(change.changedAt(), 'yyyy-MM-dd HH:mm')}">
+                                    2026-11-02 10:15
+                                </td>
+                                <td><span class="code" th:text="${change.paperCode()}">CS303</span></td>
+                                <td class="muted" th:text="${change.was()}">2026-11-10 09:00 for 3 h</td>
+                                <td th:text="${change.became()}">2026-11-10 14:00 for 3 h</td>
+                                <td>
+                                    <span class="badge badge--muted" th:text="${change.scope()}">PAPER</span>
+                                </td>
+                                <td class="mono" th:text="${change.changedBy()}">coordinator@example.edu</td>
+                                <td>
+                                    <span class="muted" th:unless="${change.wasSavedWithWarnings()}">none</span>
+                                    <span class="badge badge--wait" th:if="${change.wasSavedWithWarnings()}"
+                                          th:text="${change.warnings()}">Student S012 clashes</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="panel__footnote">
+                        This history is only ever added to. The warnings column records what was on
+                        screen when the change was saved, so a clash created knowingly can be told apart
+                        from one created blind.
+                    </p>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>

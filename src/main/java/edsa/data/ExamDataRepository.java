@@ -50,10 +50,12 @@ public class ExamDataRepository {
                     student.getId(), student.getName(), student.getDepartment());
         }
         for (Faculty member : workbook.faculty()) {
-            jdbc.update("INSERT INTO faculty (id, name, email, department, available) VALUES (?, ?, ?, ?, ?)",
+            jdbc.update("INSERT INTO faculty (id, name, email, department, available, designation, "
+                            + "seniority_value) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     member.getId(), member.getName(),
                     workbook.facultyEmails().get(member.getId()), member.getDepartment(),
-                    workbook.facultyAvailability().getOrDefault(member.getId(), true));
+                    workbook.facultyAvailability().getOrDefault(member.getId(), true),
+                    member.getDesignation(), member.getSeniorityValue());
         }
         for (Room room : workbook.rooms()) {
             jdbc.update("INSERT INTO room (id, name, building, capacity, available) VALUES (?, ?, ?, ?, ?)",
@@ -111,9 +113,11 @@ public class ExamDataRepository {
                         rs.getInt("capacity"), rs.getString("building")));
 
         List<Faculty> faculty = jdbc.query(
-                "SELECT id, name, department FROM faculty WHERE available = TRUE ORDER BY id",
+                "SELECT id, name, department, designation, seniority_value FROM faculty "
+                        + "WHERE available = TRUE ORDER BY id",
                 (rs, row) -> new Faculty(rs.getString("id"), rs.getString("name"), rs.getString("department"),
-                        false, Set.of()));
+                        false, Set.of(), rs.getString("designation"),
+                        rs.getObject("seniority_value") == null ? null : rs.getInt("seniority_value")));
 
         Map<String, String> subjectNames = new LinkedHashMap<>();
         jdbc.query("SELECT code, name FROM subject",

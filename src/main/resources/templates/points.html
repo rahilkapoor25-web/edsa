@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: page('Points', 'points', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Duty credit</p>
+                <h1 class="page__title">Reward points</h1>
+            </div>
+            <p class="page__aside">
+                <span class="mono" th:text="${rules.pointsPerSubstitution()}">10</span> per cover ·
+                <span class="mono" th:text="${rules.pointsToSkipOneDuty()}">30</span> to be excused one duty
+            </p>
+        </div>
+
+        <p class="notice" th:if="${notice}" th:text="${notice}">Granted.</p>
+        <p class="field__error" th:if="${error}" th:text="${error}">That was refused.</p>
+
+        <section class="card empty" th:if="${ownFacultyId == null and !isAdmin}">
+            <h2 class="empty__title">No faculty record</h2>
+            <p class="empty__note">This account is not tied to an imported faculty record, so it has
+                no duties and no points. Ask the examination office.</p>
+        </section>
+
+        <!-- Your own four figures. Available is deliberately not earned minus redeemed: points
+             committed to a request nobody has decided are held, so the same thirty cannot be
+             spent on three duties at once. -->
+        <div class="stats" th:if="${balance}">
+            <div class="card stat">
+                <p class="label">Available</p>
+                <p class="stat__value mono" th:text="${balance.available()}">0</p>
+                <p class="stat__note">What you could spend now</p>
+            </div>
+            <div class="card stat">
+                <p class="label">Earned</p>
+                <p class="stat__value mono" th:text="${balance.earned()}">0</p>
+                <p class="stat__note">Every credit ever given</p>
+            </div>
+            <div class="card stat">
+                <p class="label">Redeemed</p>
+                <p class="stat__value mono" th:text="${balance.redeemed()}">0</p>
+                <p class="stat__note">Spent on exemptions</p>
+            </div>
+            <div class="card stat">
+                <p class="label">Pending</p>
+                <p class="stat__value mono" th:text="${balance.pending()}">0</p>
+                <p class="stat__note">Held against requests not yet decided</p>
+            </div>
+        </div>
+
+        <section class="panel" th:if="${ownFacultyId != null and hasPlan}">
+            <div class="panel__head">
+                <h2 class="panel__title">Spend points on a duty</h2>
+                <span class="label" th:text="'Costs ' + ${rules.pointsToSkipOneDuty()} + ' points'">
+                    Costs 30 points
+                </span>
+            </div>
+            <div class="panel__body">
+                <p class="muted">
+                    A request, not a withdrawal. It is granted only if a named colleague is free to take
+                    the room and letting you off would not take you below the minimum the office set —
+                    checked again when an administrator decides, because who is free changes.
+                </p>
+                <p class="panel__note" th:if="${#lists.isEmpty(ownDuties)}">
+                    You have no duties in the current plan.
+                </p>
+                <div class="table-wrap" th:unless="${#lists.isEmpty(ownDuties)}">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Paper</th>
+                            <th>When</th>
+                            <th>Room</th>
+                            <th class="is-controls">Ask to be excused</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="duty : ${ownDuties}">
+                            <td class="is-primary">
+                                <span class="code" th:text="${duty.slot().getPaperCode()}">CS303</span>
+                            </td>
+                            <td>
+                                <span th:text="${duty.slot().getDate()}">2026-11-10</span>
+                                <span class="mono" th:text="${duty.slot().getStartTime()} + '–' + ${duty.slot().getEndTime()}">09:00–12:00</span>
+                            </td>
+                            <td><span class="code" th:text="${duty.roomId()}">R1</span></td>
+                            <td class="is-controls">
+                                <form class="inline-form" method="post" th:action="@{/points/redeem}"
+                                      th:data-confirm="'Ask to be excused this duty for ' + ${rules.pointsToSkipOneDuty()} + ' points?'">
+                                    <input type="hidden" name="slotId" th:value="${duty.slot().getId()}">
+                                    <input type="hidden" name="roomId" th:value="${duty.roomId()}">
+                                    <input class="input input--tiny" type="text" name="reason"
+                                           placeholder="why (optional)" aria-label="Reason">
+                                    <button class="button button--quiet button--small" type="submit">Request</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" th:if="${ownFacultyId != null}">
+            <div class="panel__head">
+                <h2 class="panel__title">Your transaction history</h2>
+                <span class="label">Most recent first</span>
+            </div>
+            <div class="panel__body">
+                <p class="panel__note" th:if="${#lists.isEmpty(ledger)}">
+                    Nothing yet. Cover a colleague's duty and the credit appears here once it is confirmed.
+                </p>
+                <div class="table-wrap" th:unless="${#lists.isEmpty(ledger)}">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>What</th>
+                            <th class="is-numeric">Points</th>
+                            <th>Expires</th>
+                            <th>Note</th>
+                            <th>Recorded by</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="entry : ${ledger}">
+                            <td class="mono" th:text="${#temporals.format(entry.createdAt(), 'yyyy-MM-dd HH:mm')}">
+                                2026-11-02 10:15
+                            </td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${entry.isCredit()} ? 'badge--pass' : 'badge--muted'"
+                                      th:text="${entry.kind().label()}">Earned</span>
+                            </td>
+                            <td class="is-numeric mono"
+                                th:classappend="${entry.isCredit()} ? 'is-credit' : 'is-debit'"
+                                th:text="${entry.signedPoints()}">+10</td>
+                            <td class="muted">
+                                <span th:if="${entry.expiresAt()}"
+                                      th:text="${#temporals.format(entry.expiresAt(), 'yyyy-MM-dd')}">2027-11-02</span>
+                                <span th:unless="${entry.expiresAt()}">—</span>
+                            </td>
+                            <td class="muted" th:text="${entry.note()}">Covered CS303 in room R1</td>
+                            <td class="mono muted" th:text="${entry.createdBy()}">coordinator@example.edu</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" th:if="${ownFacultyId != null and not #lists.isEmpty(myRedemptions)}">
+            <div class="panel__head">
+                <h2 class="panel__title">Your exemption requests</h2>
+            </div>
+            <div class="panel__body">
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Paper</th>
+                            <th>Room</th>
+                            <th class="is-numeric">Points</th>
+                            <th>Status</th>
+                            <th>Outcome</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${myRedemptions}">
+                            <td class="is-primary"><span class="code" th:text="${row.paperCode()}">CS303</span></td>
+                            <td><span class="code" th:text="${row.roomId()}">R1</span></td>
+                            <td class="is-numeric mono" th:text="${row.pointsSpent()}">30</td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="'badge--' + (${row.status().tone()} == 'ok' ? 'pass'
+                                          : (${row.status().tone()} == 'bad' ? 'fail' : 'wait'))"
+                                      th:text="${row.status().label()}">Approved</span>
+                            </td>
+                            <td class="muted">
+                                <span th:if="${row.outcome()}" th:text="${row.outcome()}">Approved</span>
+                                <span th:unless="${row.outcome()}">—</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" sec:authorize="hasRole('ADMIN')">
+            <div class="panel__head">
+                <h2 class="panel__title">Exemptions awaiting your decision</h2>
+                <!-- Amber means somebody owes a decision, so a count of nothing is not amber. -->
+                    <span class="badge"
+                          th:classappend="${#lists.size(awaiting)} > 0 ? 'badge--wait' : 'badge--muted'"
+                          th:text="${#lists.size(awaiting)}">0</span>
+            </div>
+            <div class="panel__body">
+                <p class="muted">
+                    Granting spends the points and moves the duty to a named colleague. If nobody is free
+                    any more the request is refused instead and the points stay — an unstaffed examination
+                    room is a worse outcome than a disappointed colleague.
+                </p>
+                <p class="panel__note" th:if="${#lists.isEmpty(awaiting)}">Nothing is waiting.</p>
+                <div class="table-wrap" th:unless="${#lists.isEmpty(awaiting)}">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Who</th>
+                            <th>Paper</th>
+                            <th>When</th>
+                            <th>Room</th>
+                            <th class="is-numeric">Points</th>
+                            <th>Why</th>
+                            <th class="is-controls">Decide</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${awaiting}">
+                            <td><span class="code" th:text="${row.facultyId()}">F01</span></td>
+                            <td class="is-primary"><span class="code" th:text="${row.paperCode()}">CS303</span></td>
+                            <td class="mono" th:text="${#temporals.format(row.startsAt(), 'yyyy-MM-dd HH:mm')}">
+                                2026-11-10 09:00
+                            </td>
+                            <td><span class="code" th:text="${row.roomId()}">R1</span></td>
+                            <td class="is-numeric mono" th:text="${row.pointsSpent()}">30</td>
+                            <td class="muted">
+                                <span th:if="${row.reason()}" th:text="${row.reason()}">Family</span>
+                                <span th:unless="${row.reason()}">—</span>
+                            </td>
+                            <td class="row-actions is-controls">
+                                <form method="post"
+                                      th:action="@{'/points/redemptions/' + ${row.id()} + '/approve'}"
+                                      data-confirm="Grant this exemption, spend the points and move the duty?">
+                                    <button class="button button--small" type="submit">Grant</button>
+                                </form>
+                                <form class="inline-form" method="post"
+                                      th:action="@{'/points/redemptions/' + ${row.id()} + '/reject'}">
+                                    <input class="input input--tiny" type="text" name="why"
+                                           placeholder="why" aria-label="Why">
+                                    <button class="button button--quiet button--small" type="submit">Refuse</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" sec:authorize="hasRole('ADMIN')" th:if="${balances}">
+            <div class="panel__head">
+                <h2 class="panel__title">Every balance</h2>
+                <span class="label">Earned, redeemed, pending, available</span>
+            </div>
+            <div class="panel__body">
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Invigilator</th>
+                            <th class="is-numeric">Earned</th>
+                            <th class="is-numeric">Redeemed</th>
+                            <th class="is-numeric">Expired</th>
+                            <th class="is-numeric">Pending</th>
+                            <th class="is-numeric">Available</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="member : ${faculty}">
+                            <td class="is-primary">
+                                <span th:text="${member.getName()}">Dr Meera Nair</span>
+                                <span class="code" th:text="${member.getId()}">F01</span>
+                            </td>
+                            <td class="is-numeric mono" th:text="${balances.get(member.getId()).earned()}">0</td>
+                            <td class="is-numeric mono" th:text="${balances.get(member.getId()).redeemed()}">0</td>
+                            <td class="is-numeric mono" th:text="${balances.get(member.getId()).expired()}">0</td>
+                            <td class="is-numeric mono" th:text="${balances.get(member.getId()).pending()}">0</td>
+                            <td class="is-numeric mono is-primary"
+                                th:text="${balances.get(member.getId()).available()}">0</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" sec:authorize="hasRole('ADMIN')" th:if="${faculty}">
+            <div class="panel__head">
+                <h2 class="panel__title">Correct a balance</h2>
+                <span class="label">Recorded as its own entry</span>
+            </div>
+            <div class="panel__body">
+                <p class="muted">
+                    A correction is another row in the ledger, never an edit of one, so the history always
+                    explains the balance it produces. It must say why, and you cannot correct your own.
+                </p>
+                <form class="filter" method="post" th:action="@{/points/adjust}"
+                      data-confirm="Record this correction against that professor's balance?">
+                    <div class="filter__field">
+                        <label class="label" for="adjustFaculty">Invigilator</label>
+                        <select class="input select" id="adjustFaculty" name="facultyId" required>
+                            <option th:each="member : ${faculty}" th:value="${member.getId()}"
+                                    th:text="${member.getName()} + ' (' + ${member.getId()} + ')'">
+                                Dr Meera Nair (F01)
+                            </option>
+                        </select>
+                    </div>
+                    <div class="filter__field">
+                        <label class="label" for="adjustPoints">Points</label>
+                        <input class="input mono" type="number" id="adjustPoints" name="points"
+                               placeholder="10 or -10" required>
+                    </div>
+                    <div class="filter__field">
+                        <label class="label" for="adjustWhy">Why</label>
+                        <input class="input" type="text" id="adjustWhy" name="why" required
+                               placeholder="required, shown in the history">
+                    </div>
+                    <div class="filter__actions">
+                        <button class="button" type="submit">Record</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

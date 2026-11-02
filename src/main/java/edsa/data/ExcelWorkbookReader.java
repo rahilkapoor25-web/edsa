@@ -201,11 +201,34 @@ public final class ExcelWorkbookReader {
                 continue;
             }
             String email = readEmail(sheet, row, columns, emailOwners, id);
-            faculty.add(new Faculty(id, name, department, false, Set.of()));
+            String designation = optional(row, columns, "Designation");
+            Integer seniority = readSeniority(sheet, row, columns);
+            faculty.add(new Faculty(id, name, department, false, Set.of(), designation, seniority));
             availability.put(id, readAvailability(sheet, row, columns, "Available"));
             if (email != null) {
                 emails.put(id, email);
             }
+        }
+    }
+
+    /**
+     * The optional Seniority column: an explicit ladder position that overrides the designation.
+     *
+     * <p>Blank is the normal case and means "use the designation". A value that is not a whole
+     * number is reported rather than ignored, because a coordinator who typed something in that
+     * column meant it to count, and silently dropping it would place somebody wrongly on the
+     * ladder without anybody noticing.
+     */
+    private Integer readSeniority(Sheet sheet, Row row, Map<String, Integer> columns) {
+        String value = optional(row, columns, "Seniority");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException notANumber) {
+            error(sheet, row, "Seniority", "'" + value.trim() + "' is not a whole number");
+            return null;
         }
     }
 

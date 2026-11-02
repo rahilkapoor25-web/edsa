@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: page('Substitutions', 'substitutions', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Cover for a colleague</p>
+                <h1 class="page__title">Substitute duties</h1>
+            </div>
+            <p class="page__aside" th:if="${balance}">
+                <span class="mono" th:text="${balance.available()}">0</span> points available ·
+                <a th:href="@{/points}">your ledger</a>
+            </p>
+        </div>
+
+        <p class="notice" th:if="${notice}" th:text="${notice}">Offered.</p>
+        <p class="field__error" th:if="${error}" th:text="${error}">That was refused.</p>
+
+        <section class="card empty" th:unless="${hasPlan}">
+            <h2 class="empty__title">No plan yet</h2>
+            <p class="empty__note">Duties can only be offered once a plan exists to offer them from.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <div th:if="${hasPlan}">
+
+            <p class="panel__note">
+                Covering a duty earns <span class="mono" th:text="${rules.pointsPerSubstitution()}">10</span>
+                points, awarded only once an administrator confirms the duty was actually done. Being
+                excused a future duty costs <span class="mono" th:text="${rules.pointsToSkipOneDuty()}">30</span>,
+                so <span class="mono" th:text="${rules.coversPerExemption()}">3</span> covers buy one
+                exemption — the scheme rewards extra work rather than offering a way to do less of it.
+            </p>
+
+            <section class="panel" th:if="${ownFacultyId != null}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Offer one of your duties</h2>
+                    <span class="label" th:text="${ownFacultyId}">F01</span>
+                </div>
+                <div class="panel__body">
+                    <p class="panel__note" th:if="${#lists.isEmpty(ownDuties)}">
+                        You have no duties in the current plan.
+                    </p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(ownDuties)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th class="is-controls">Offer it</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="duty : ${ownDuties}">
+                                <td class="is-primary">
+                                    <span class="code" th:text="${duty.slot().getPaperCode()}">CS303</span>
+                                </td>
+                                <td>
+                                    <span th:text="${duty.slot().getDate()}">2026-11-10</span>
+                                    <span class="mono" th:text="${duty.slot().getStartTime()} + '–' + ${duty.slot().getEndTime()}">09:00–12:00</span>
+                                </td>
+                                <td><span class="code" th:text="${duty.roomId()}">R1</span></td>
+                                <td class="is-controls">
+                                    <span class="badge badge--wait" th:if="${duty.alreadyOffered()}">Already offered</span>
+                                    <form class="inline-form" method="post" th:action="@{/substitutions/offer}"
+                                          th:unless="${duty.alreadyOffered()}">
+                                        <input type="hidden" name="slotId" th:value="${duty.slot().getId()}">
+                                        <input type="hidden" name="roomId" th:value="${duty.roomId()}">
+                                        <input class="input input--tiny" type="text" name="reason"
+                                               placeholder="why (optional)" aria-label="Reason">
+                                        <button class="button button--quiet button--small" type="submit">Offer</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Open offers</h2>
+                    <span class="label">Anybody eligible may take these</span>
+                </div>
+                <div class="panel__body">
+                    <p class="panel__note" th:if="${#lists.isEmpty(open)}">
+                        No duty is up for cover at the moment.
+                    </p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(open)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th>Whose duty</th>
+                                <th>Why</th>
+                                <th>Worth</th>
+                                <th>Take it</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="offer : ${open}">
+                                <td class="is-primary">
+                                    <span class="code" th:text="${offer.paperCode()}">CS303</span>
+                                </td>
+                                <td class="mono"
+                                    th:text="${#temporals.format(offer.startsAt(), 'yyyy-MM-dd HH:mm')} + '–' + ${#temporals.format(offer.endsAt(), 'HH:mm')}">
+                                    2026-11-10 09:00–12:00
+                                </td>
+                                <td><span class="code" th:text="${offer.roomId()}">R1</span></td>
+                                <td><span class="code" th:text="${offer.originalFacultyId()}">F01</span></td>
+                                <td class="muted">
+                                    <span th:if="${offer.reason()}" th:text="${offer.reason()}">Conference</span>
+                                    <span th:unless="${offer.reason()}">—</span>
+                                </td>
+                                <td class="is-numeric mono"
+                                    th:text="'+' + ${rules.pointsPerSubstitution()}">+10</td>
+                                <td class="row-actions">
+                                    <span class="muted"
+                                          th:if="${ownFacultyId != null and ownFacultyId == offer.originalFacultyId()}">
+                                        your own duty
+                                    </span>
+                                    <form method="post" th:action="@{'/substitutions/' + ${offer.id()} + '/volunteer'}"
+                                          th:if="${ownFacultyId != null and ownFacultyId != offer.originalFacultyId()}"
+                                          data-confirm="Offer to cover this duty?">
+                                        <button class="button button--small" type="submit">Volunteer</button>
+                                    </form>
+                                    <form method="post" th:action="@{'/substitutions/' + ${offer.id()} + '/withdraw'}"
+                                          th:if="${ownFacultyId != null and ownFacultyId == offer.originalFacultyId()}"
+                                          data-confirm="Take this offer back?">
+                                        <button class="button button--quiet button--small" type="submit">Withdraw</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" sec:authorize="hasRole('ADMIN')">
+                <div class="panel__head">
+                    <h2 class="panel__title">Awaiting your approval</h2>
+                    <!-- Amber means somebody owes a decision, so a count of nothing is not amber. -->
+                    <span class="badge"
+                          th:classappend="${#lists.size(awaitingApproval)} > 0 ? 'badge--wait' : 'badge--muted'"
+                          th:text="${#lists.size(awaitingApproval)}">0</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        Approving moves the duty. It awards nothing — the substitute has agreed to turn
+                        up, not turned up. You cannot decide a case you are party to.
+                    </p>
+                    <p class="panel__note" th:if="${#lists.isEmpty(awaitingApproval)}">
+                        Nothing is waiting.
+                    </p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(awaitingApproval)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th class="is-controls">Decide</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="claim : ${awaitingApproval}">
+                                <td class="is-primary"><span class="code" th:text="${claim.paperCode()}">CS303</span></td>
+                                <td class="mono" th:text="${#temporals.format(claim.startsAt(), 'yyyy-MM-dd HH:mm')}">
+                                    2026-11-10 09:00
+                                </td>
+                                <td><span class="code" th:text="${claim.roomId()}">R1</span></td>
+                                <td><span class="code" th:text="${claim.originalFacultyId()}">F01</span></td>
+                                <td><span class="code" th:text="${claim.volunteerFacultyId()}">F02</span></td>
+                                <td class="row-actions is-controls">
+                                    <form method="post" th:action="@{'/substitutions/' + ${claim.id()} + '/approve'}">
+                                        <button class="button button--small" type="submit">Approve</button>
+                                    </form>
+                                    <form class="inline-form" method="post"
+                                          th:action="@{'/substitutions/' + ${claim.id()} + '/reject'}">
+                                        <input class="input input--tiny" type="text" name="why"
+                                               placeholder="why" aria-label="Why">
+                                        <button class="button button--quiet button--small" type="submit">Reject</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" sec:authorize="hasRole('ADMIN')">
+                <div class="panel__head">
+                    <h2 class="panel__title">Approved, awaiting confirmation</h2>
+                    <span class="label">Points are awarded here and nowhere else</span>
+                </div>
+                <div class="panel__body">
+                    <p class="panel__note" th:if="${#lists.isEmpty(awaitingCompletion)}">
+                        Nothing is waiting to be confirmed.
+                    </p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(awaitingCompletion)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th>Covered by</th>
+                                <th>Confirm it was done</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="done : ${awaitingCompletion}">
+                                <td class="is-primary"><span class="code" th:text="${done.paperCode()}">CS303</span></td>
+                                <td class="mono" th:text="${#temporals.format(done.startsAt(), 'yyyy-MM-dd HH:mm')}">
+                                    2026-11-10 09:00
+                                </td>
+                                <td><span class="code" th:text="${done.roomId()}">R1</span></td>
+                                <td><span class="code" th:text="${done.volunteerFacultyId()}">F02</span></td>
+                                <td>
+                                    <form method="post" th:action="@{'/substitutions/' + ${done.id()} + '/complete'}"
+                                          th:data-confirm="'Confirm this duty was invigilated, and award ' + ${rules.pointsPerSubstitution()} + ' points?'">
+                                        <button class="button button--small" type="submit">
+                                            Confirm and award
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" th:if="${ownFacultyId != null and not #lists.isEmpty(mine)}">
+                <div class="panel__head">
+                    <h2 class="panel__title">Yours</h2>
+                    <span class="label">Offered or covered by you</span>
+                </div>
+                <div class="panel__body">
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th>Your part</th>
+                                <th>Status</th>
+                                <th>Outcome</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="row : ${mine}">
+                                <td class="is-primary"><span class="code" th:text="${row.paperCode()}">CS303</span></td>
+                                <td class="mono" th:text="${#temporals.format(row.startsAt(), 'yyyy-MM-dd HH:mm')}">
+                                    2026-11-10 09:00
+                                </td>
+                                <td><span class="code" th:text="${row.roomId()}">R1</span></td>
+                                <td th:text="${row.originalFacultyId() == ownFacultyId} ? 'Gave it up' : 'Covering it'">
+                                    Covering it
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="'badge--' + (${row.status().tone()} == 'ok' ? 'pass'
+                                              : (${row.status().tone()} == 'bad' ? 'fail'
+                                              : (${row.status().tone()} == 'pending' ? 'wait' : 'muted')))"
+                                          th:text="${row.status().label()}">Completed</span>
+                                </td>
+                                <td class="muted">
+                                    <span th:if="${row.outcome()}" th:text="${row.outcome()}">Completed</span>
+                                    <span th:unless="${row.outcome()}">—</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" sec:authorize="hasRole('ADMIN')">
+                <div class="panel__head">
+                    <h2 class="panel__title">Every substitution</h2>
+                    <span class="label">The full record</span>
+                </div>
+                <div class="panel__body">
+                    <p class="panel__note" th:if="${#lists.isEmpty(all)}">Nothing has been offered yet.</p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(all)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>Room</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Status</th>
+                                <th>Decided by</th>
+                                <th>Confirmed by</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="row : ${all}">
+                                <td><span class="code" th:text="${row.paperCode()}">CS303</span></td>
+                                <td><span class="code" th:text="${row.roomId()}">R1</span></td>
+                                <td><span class="code" th:text="${row.originalFacultyId()}">F01</span></td>
+                                <td>
+                                    <span class="code" th:if="${row.hasVolunteer()}"
+                                          th:text="${row.volunteerFacultyId()}">F02</span>
+                                    <span class="muted" th:unless="${row.hasVolunteer()}">nobody yet</span>
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="'badge--' + (${row.status().tone()} == 'ok' ? 'pass'
+                                              : (${row.status().tone()} == 'bad' ? 'fail'
+                                              : (${row.status().tone()} == 'pending' ? 'wait' : 'muted')))"
+                                          th:text="${row.status().label()}">Completed</span>
+                                </td>
+                                <td class="mono muted">
+                                    <span th:if="${row.decidedBy()}" th:text="${row.decidedBy()}">coordinator@example.edu</span>
+                                    <span th:unless="${row.decidedBy()}">—</span>
+                                </td>
+                                <td class="mono muted">
+                                    <span th:if="${row.completedBy()}" th:text="${row.completedBy()}">coordinator@example.edu</span>
+                                    <span th:unless="${row.completedBy()}">—</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>

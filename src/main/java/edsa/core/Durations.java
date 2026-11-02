@@ -6,6 +6,16 @@ public final class Durations {
     private Durations() {
     }
 
+    /**
+     * A time of day written from a count of minutes since midnight, for saying when a sitting
+     * would have finished even though it ran past the end of the day and so has no valid time.
+     */
+    public static String clock(long minuteOfDay) {
+        long hours = minuteOfDay / 60;
+        long minutes = minuteOfDay % 60;
+        return String.format("%02d:%02d", hours, minutes);
+    }
+
     public static String label(int minutes) {
         if (minutes <= 0) {
             return minutes + " min";

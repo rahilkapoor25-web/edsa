@@ -17,6 +17,13 @@ package edsa.core;
  * length is now reported as ignored instead of applied — see
  * {@link Exam#overrideIgnoredUnder(ExamMode)} — so the figure in the workbook is visible
  * without being obeyed.
+ *
+ * <p>A length an authorised person set is a different thing from a length a spreadsheet
+ * carried, and {@link #minutesForApproved(Integer)} is the one path that honours it. The
+ * distinction is not a loophole in the rule above, it is the rule's reason: a workbook cell is
+ * untrusted input of unknown age and authorship, while a change made through the timing page is
+ * attributable, reviewed against the plan it would break, and written to an append-only audit
+ * history. The importer can never reach that path; only an override a coordinator saved can.
  */
 public enum ExamMode {
 
@@ -32,6 +39,15 @@ public enum ExamMode {
      * it is being ignored.
      */
     public static final int MAX_OVERRIDE_MINUTES = 300;
+
+    /**
+     * The shortest length an authorised person may set a sitting to.
+     *
+     * <p>Not zero, and not one: a sitting has to be long enough to seat a cohort and collect
+     * the papers back in, and a mistyped duration is far more likely than a genuine two-minute
+     * examination.
+     */
+    public static final int MIN_APPROVED_MINUTES = 5;
 
     private final String label;
     private final int defaultMinutes;
@@ -60,6 +76,30 @@ public enum ExamMode {
      */
     public boolean allowsDurationOverride() {
         return false;
+    }
+
+    /**
+     * Whether an authorised person may time a sitting of this mode to this many minutes.
+     *
+     * <p>Bounded rather than unlimited. The bounds are the protection that remains once a
+     * person is allowed to type a number: they stop a slip of the keyboard producing a
+     * three-minute Endsem or a sitting that outlasts the day, and they apply to every mode
+     * equally, including Quiz — a Quiz an office deliberately lengthens is a decision somebody
+     * made and signed, which is exactly what the workbook value never was.
+     */
+    public boolean permitsApproved(Integer minutes) {
+        return minutes != null && minutes >= MIN_APPROVED_MINUTES && minutes <= MAX_OVERRIDE_MINUTES;
+    }
+
+    /**
+     * How long a sitting runs when an authorised person has set its length.
+     *
+     * <p>Falls back to the mode's own length when the figure is one this mode will not accept,
+     * so a bad value cannot produce a nonsense sitting; the caller is expected to have refused
+     * it before saving, and this is the second line rather than the first.
+     */
+    public int minutesForApproved(Integer minutes) {
+        return permitsApproved(minutes) ? minutes : defaultMinutes;
     }
 
     /** Whether this mode accepts that declared length, rather than falling back to its own. */

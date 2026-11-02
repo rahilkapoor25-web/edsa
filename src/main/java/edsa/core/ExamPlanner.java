@@ -16,15 +16,33 @@ public final class ExamPlanner {
     private final GreedyAllocator allocator;
     private final PlanChecker checker;
 
+    private final DutyEligibility eligibility;
+
     public ExamPlanner(SchedulingConfig config) {
+        this(config, new DutyEligibility(SeniorityLadder.defaults(), DutyPolicy.unweighted(),
+                LeaveCalendar.empty()));
+    }
+
+    /**
+     * Plans under a configured duty policy. Confirmed leave is part of the eligibility handed
+     * in, so a planner built with today's leave will not staff a room with somebody who is away
+     * — and a planner built before a leave request was confirmed knows nothing about it, which
+     * is why the pages build a fresh one rather than holding on to this.
+     */
+    public ExamPlanner(SchedulingConfig config, DutyEligibility eligibility) {
         this.config = config;
+        this.eligibility = eligibility;
         this.scheduler = new TimetableScheduler(config);
-        this.allocator = new GreedyAllocator(config);
+        this.allocator = new GreedyAllocator(config, eligibility);
         this.checker = PlanChecker.using(config);
     }
 
     public ExamPlanner() {
         this(SchedulingConfig.defaults());
+    }
+
+    public DutyEligibility eligibility() {
+        return eligibility;
     }
 
     public SchedulingConfig config() {

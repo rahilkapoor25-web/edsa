@@ -32,6 +32,22 @@ final class TestData {
         return faculty;
     }
 
+    /** Faculty on named ranks, so a weighted ladder has something to weight. */
+    static List<Faculty> ranked(String... designations) {
+        List<Faculty> faculty = new ArrayList<>();
+        for (int index = 1; index <= designations.length; index++) {
+            faculty.add(new Faculty("F" + index, "Faculty " + index, "CSE", false, Set.of(),
+                    designations[index - 1], null));
+        }
+        return faculty;
+    }
+
+    /** One member who teaches the papers named, for the course-teacher rule. */
+    static Faculty teaching(String id, String... subjectCodes) {
+        return new Faculty(id, "Faculty " + id, "CSE", false,
+                new LinkedHashSet<>(Set.of(subjectCodes)));
+    }
+
     static List<Room> rooms(int count, int capacity) {
         List<Room> rooms = new ArrayList<>();
         for (int index = 1; index <= count; index++) {

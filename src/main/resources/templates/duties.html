@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: page('Duties', 'duties', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Invigilation</p>
+                <h1 class="page__title">Duty allocation</h1>
+            </div>
+            <p class="page__aside" th:if="${hasPlan}">
+                <span th:text="${mode.label()}">Endsem</span> ·
+                <span class="mono" th:text="${totalRooms}">12</span> room sittings
+            </p>
+        </div>
+
+        <p class="notice" th:if="${notice}" th:text="${notice}">Approved.</p>
+        <p class="field__error" th:if="${error}" th:text="${error}">Something was refused.</p>
+
+        <section class="card empty" th:unless="${hasPlan}">
+            <h2 class="empty__title">No plan yet</h2>
+            <p class="empty__note">Load the data and compute a plan, and the recommended duties will
+                appear here for review.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <div th:if="${hasPlan}">
+
+            <!-- The four figures a coordinator checks first: is anything unstaffed, and how much
+                 of the roster has somebody actually looked at. -->
+            <div class="stats">
+                <div class="card stat">
+                    <p class="label">Unstaffed rooms</p>
+                    <p class="stat__value mono" th:text="${unstaffed}"
+                       th:classappend="${unstaffed > 0} ? 'is-bad'">0</p>
+                    <p class="stat__note" th:text="${unstaffed > 0}
+                        ? 'Each needs an invigilator before the session can run'
+                        : 'Every room has somebody'">Every room has somebody</p>
+                </div>
+                <div class="card stat">
+                    <p class="label">Awaiting review</p>
+                    <p class="stat__value mono" th:text="${awaitingReview}">12</p>
+                    <p class="stat__note">Recommended by the allocator, not yet approved</p>
+                </div>
+                <div class="card stat">
+                    <p class="label">Approved</p>
+                    <p class="stat__value mono" th:text="${approved}">0</p>
+                    <p class="stat__note">A coordinator stands behind these</p>
+                </div>
+                <div class="card stat">
+                    <p class="label">Busiest minus quietest</p>
+                    <p class="stat__value mono" th:text="${spread}">1</p>
+                    <p class="stat__note">The spread of duties across the faculty</p>
+                </div>
+            </div>
+
+            <p class="problems" th:if="${not #lists.isEmpty(unrecognisedRanks)}">
+                <strong>Designations the configured ladder does not recognise:</strong>
+                <span class="code" th:each="rank : ${unrecognisedRanks}" th:text="${rank}">VISITING</span>
+                — these are placed below every configured rank and carry a full share of duties.
+            </p>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Room by room</h2>
+                    <span class="label">Timetable order</span>
+                </div>
+                <div class="panel__body">
+
+                    <form class="filter" method="get" th:action="@{/duties}">
+                        <div class="filter__field">
+                            <label class="label" for="filter">Show</label>
+                            <select class="input select" id="filter" name="filter">
+                                <option value="all" th:selected="${filter == 'all'}">Every room</option>
+                                <option value="unstaffed" th:selected="${filter == 'unstaffed'}">
+                                    Unstaffed only
+                                </option>
+                                <option value="review" th:selected="${filter == 'review'}">
+                                    Awaiting review
+                                </option>
+                                <option value="approved" th:selected="${filter == 'approved'}">
+                                    Approved
+                                </option>
+                            </select>
+                        </div>
+                        <div class="filter__actions">
+                            <button class="button button--quiet button--small" type="submit">Apply</button>
+                        </div>
+                    </form>
+
+                    <form method="post" th:action="@{/duties/approve-all}" sec:authorize="hasAnyRole('ADMIN','COORDINATOR')"
+                          th:if="${awaitingReview > 0}"
+                          data-confirm="Approve every duty the allocator recommended?"
+                          data-busy="Approving…">
+                        <button class="button button--small" type="submit">
+                            Approve all <span th:text="${awaitingReview}">12</span> recommendations
+                        </button>
+                    </form>
+
+                    <p class="panel__note" th:if="${#lists.isEmpty(rows)}">
+                        Nothing matches that filter.
+                    </p>
+
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(rows)}">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Paper</th>
+                                <th>When</th>
+                                <th>Room</th>
+                                <th>Invigilator</th>
+                                <th>Rank</th>
+                                <th class="is-numeric">Duties</th>
+                                <th>Status</th>
+                                <th class="is-controls" th:if="${canApprove}">Action</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="row : ${rows}" th:classappend="${row.isUnstaffed()} ? 'is-bad-row'">
+                                <td class="is-primary">
+                                    <span class="code" th:text="${row.slot().getPaperCode()}">CS303</span>
+                                </td>
+                                <td>
+                                    <span th:text="${row.slot().getDate()}">2026-11-10</span>
+                                    <span class="mono" th:text="${row.slot().getStartTime()} + '–' + ${row.slot().getEndTime()}">09:00–12:00</span>
+                                </td>
+                                <td><span class="code" th:text="${row.roomId()}">R1</span></td>
+                                <td>
+                                    <span class="muted" th:if="${row.isUnstaffed()}">nobody</span>
+                                    <span th:unless="${row.isUnstaffed()}" th:text="${row.member().getName()}">Dr Meera Nair</span>
+                                    <span class="badge badge--pass" th:if="${row.senior()}">Senior</span>
+                                </td>
+                                <td class="muted" th:text="${row.designationLabel()}">Professor</td>
+                                <td class="is-numeric" th:text="${row.dutiesHeld()}">2</td>
+                                <td>
+                                    <span class="badge badge--fail" th:if="${row.isUnstaffed()}">Unstaffed</span>
+                                    <span class="badge badge--wait" th:if="${row.awaitingReview()}">Awaiting review</span>
+                                    <span class="badge badge--pass"
+                                          th:if="${!row.isUnstaffed() and row.origin().decidedByPerson()}"
+                                          th:text="${row.origin().label()}">Approved</span>
+                                    <span class="badge badge--muted"
+                                          th:if="${!row.isUnstaffed() and row.origin().name() == 'SUBSTITUTED'}">Substitute</span>
+                                </td>
+                                <td class="row-actions is-controls" th:if="${canApprove}">
+                                    <form method="post" th:action="@{/duties/approve}" th:if="${row.awaitingReview()}">
+                                        <input type="hidden" name="slotId" th:value="${row.slot().getId()}">
+                                        <input type="hidden" name="roomId" th:value="${row.roomId()}">
+                                        <button class="button button--quiet button--small" type="submit">Approve</button>
+                                    </form>
+                                    <form method="post" th:action="@{/duties/clear}"
+                                          th:if="${!row.isUnstaffed() and row.origin().decidedByPerson()}"
+                                          data-confirm="Return this room to the allocator's recommendation?">
+                                        <input type="hidden" name="slotId" th:value="${row.slot().getId()}">
+                                        <input type="hidden" name="roomId" th:value="${row.roomId()}">
+                                        <button class="button button--quiet button--small" type="submit">Undo</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" sec:authorize="hasAnyRole('ADMIN','COORDINATOR')">
+                <div class="panel__head">
+                    <h2 class="panel__title">Assign a room by hand</h2>
+                    <span class="label">Coordinator</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        Overrules the allocator's preference for one room. A colleague who is already
+                        invigilating at that time, or on confirmed leave, is refused — that would be a
+                        plan which fails its own rule check.
+                    </p>
+                    <form class="filter" method="post" th:action="@{/duties/assign}">
+                        <div class="filter__field">
+                            <label class="label" for="assignSlot">Sitting</label>
+                            <select class="input select" id="assignSlot" name="slotId" required>
+                                <option th:each="row : ${rows}" th:value="${row.slot().getId()}"
+                                        th:text="${row.slot().getPaperCode()} + ' · ' + ${row.slot().getDate()} + ' ' + ${row.slot().getStartTime()}">
+                                    CS303 · 2026-11-10 09:00
+                                </option>
+                            </select>
+                        </div>
+                        <div class="filter__field">
+                            <label class="label" for="assignRoom">Room</label>
+                            <input class="input mono" type="text" id="assignRoom" name="roomId"
+                                   placeholder="R1" required>
+                        </div>
+                        <div class="filter__field">
+                            <label class="label" for="assignFaculty">Invigilator</label>
+                            <select class="input select" id="assignFaculty" name="facultyId" required>
+                                <option th:each="member : ${faculty}" th:value="${member.getId()}"
+                                        th:text="${member.getName()} + ' (' + ${member.getId()} + ')'">
+                                    Dr Meera Nair (F01)
+                                </option>
+                            </select>
+                        </div>
+                        <div class="filter__field">
+                            <label class="label" for="assignNote">Why</label>
+                            <input class="input" type="text" id="assignNote" name="note"
+                                   placeholder="optional, kept with the decision">
+                        </div>
+                        <div class="filter__actions">
+                            <button class="button" type="submit">Assign</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">Fairness</h2>
+                    <span class="label">Duties against the share each rank carries</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        The expected column is this session's duties divided by the shares the configured
+                        ladder asks of each rank — not an equal split, because a rank set to half a share
+                        is expected to do half as much. A gap of less than one duty is rounding, not unfairness.
+                    </p>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Invigilator</th>
+                                <th>Rank</th>
+                                <th class="is-numeric">Share</th>
+                                <th class="is-numeric">Duties</th>
+                                <th class="is-numeric">Expected</th>
+                                <th class="is-numeric">Gap</th>
+                                <th>Spread</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="row : ${fairness}">
+                                <td class="is-primary">
+                                    <span th:text="${row.member().getName()}">Dr Meera Nair</span>
+                                    <span class="code" th:text="${row.member().getId()}">F01</span>
+                                </td>
+                                <td class="muted" th:text="${row.designationLabel()}">Professor</td>
+                                <td class="is-numeric mono" th:text="${#numbers.formatDecimal(row.share(), 1, 2)}">0.50</td>
+                                <td class="is-numeric mono" th:text="${row.duties()}">2</td>
+                                <td class="is-numeric mono" th:text="${#numbers.formatDecimal(row.expected(), 1, 1)}">1.5</td>
+                                <td class="is-numeric mono gap"
+                                    th:classappend="${row.isOverloaded()} ? 'gap--over' : (${row.isUnderloaded()} ? 'gap--under' : '')"
+                                    th:text="${row.gap() > 0 ? '+' : ''} + ${#numbers.formatDecimal(row.gap(), 1, 1)}">+0.5</td>
+                                <td>
+                                    <span class="bar" aria-hidden="true">
+                                        <span class="bar__fill"
+                                              th:classappend="${row.isOverloaded()} ? 'is-over' : (${row.isUnderloaded()} ? 'is-under' : '')"
+                                              th:style="'width:' + ${row.barPercent(mostDuties)} + '%'"></span>
+                                    </span>
+                                    <span class="visually-hidden"
+                                          th:text="${row.duties()} + ' duties'">2 duties</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2 class="panel__title">The ladder in force</h2>
+                    <span class="label">Configured, not institutional</span>
+                </div>
+                <div class="panel__body">
+                    <p class="muted">
+                        These ranks and shares come from this installation's configuration. They are a
+                        starting point this application chose, not a policy of any institution — an
+                        examination office should confirm them and change them in
+                        <span class="code">edsa.duties.ranks</span>.
+                    </p>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Code in the workbook</th>
+                                <th class="is-numeric">Seniority</th>
+                                <th class="is-numeric">Duty share</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="rank : ${ladder}">
+                                <td class="is-primary" th:text="${rank.label()}">Professor</td>
+                                <td><span class="code" th:text="${rank.code()}">PROFESSOR</span></td>
+                                <td class="is-numeric mono" th:text="${rank.seniorityRank()}">50</td>
+                                <td class="is-numeric mono"
+                                    th:text="${#numbers.formatDecimal(rank.dutyShare(), 1, 2)}">0.50</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="panel__footnote">
+                        Weighting by rank is
+                        <strong th:text="${policy.weightBySeniority()} ? 'on' : 'off'">on</strong>;
+                        a course teacher
+                        <strong th:text="${policy.courseTeacherMayInvigilate()} ? 'may' : 'may not'">may not</strong>
+                        invigilate their own paper;
+                        the minimum per invigilator is
+                        <span class="mono" th:text="${policy.minDutiesPerMember()}">1</span>
+                        and the cap is
+                        <span class="mono" th:text="${policy.hasCap()} ? ${policy.maxDutiesPerMember()} : 'none'">none</span>.
+                        A seniority value on a faculty record overrides its designation.
+                    </p>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>

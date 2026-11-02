@@ -37,6 +37,14 @@
                th:href="@{/rooms}">Room schedule</a>
             <a class="tab" th:classappend="${activeTab == 'workloads'} ? 'tab--active'"
                th:href="@{/workloads}">Workloads</a>
+            <a class="tab" th:classappend="${activeTab == 'duties'} ? 'tab--active'"
+               th:href="@{/duties}">Duties</a>
+            <a class="tab" th:classappend="${activeTab == 'timings'} ? 'tab--active'"
+               th:href="@{/timings}" sec:authorize="hasAnyRole('ADMIN','COORDINATOR')">Timings</a>
+            <a class="tab" th:classappend="${activeTab == 'substitutions'} ? 'tab--active'"
+               th:href="@{/substitutions}">Substitutions</a>
+            <a class="tab" th:classappend="${activeTab == 'points'} ? 'tab--active'"
+               th:href="@{/points}">Points</a>
             <a class="tab" th:classappend="${activeTab == 'disruption'} ? 'tab--active'"
                th:href="@{/disruption}">Disruption</a>
             <a class="tab" th:classappend="${activeTab == 'users'} ? 'tab--active'"

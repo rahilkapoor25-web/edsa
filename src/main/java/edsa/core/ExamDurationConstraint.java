@@ -10,6 +10,11 @@ import java.util.List;
  * {@link ExamMode#minutesFor(Integer)} when it times a paper; this rule asks the same question
  * again afterwards and compares, so a sitting timed from a stale workbook value — a ten-minute
  * Quiz stretched to ninety — is reported as a broken rule rather than presented as a timetable.
+ *
+ * <p>A length an authorised person set is checked the same way, against
+ * {@link ExamMode#minutesForApproved(Integer)}: a sitting re-timed through the timing page must
+ * match what was approved for it, so a saved override that failed to reach the scheduler shows
+ * up here rather than passing as the mode's own length.
  */
 public final class ExamDurationConstraint implements HardConstraint {
 
@@ -42,10 +47,21 @@ public final class ExamDurationConstraint implements HardConstraint {
         return problems;
     }
 
-    /** What the mode says this paper should run for, taking its declared length into account. */
+    /**
+     * What the mode says this paper should run for.
+     *
+     * <p>Asked of the mode directly rather than read back off the exam, which is what keeps
+     * this an independent check: if {@link Exam#durationUnder(ExamMode)} ever disagreed with
+     * the mode, this would catch it instead of agreeing with it.
+     */
     private int requiredMinutes(ExamPlan plan, ExamSlot slot) {
         Exam exam = plan.data().exam(slot.getId());
-        Integer declared = exam == null ? null : exam.getDurationOverrideMinutes().orElse(null);
-        return plan.mode().minutesFor(declared);
+        if (exam == null) {
+            return plan.mode().defaultMinutes();
+        }
+        Integer approved = exam.getApprovedDurationMinutes().orElse(null);
+        return approved == null
+                ? plan.mode().minutesFor(exam.getDurationOverrideMinutes().orElse(null))
+                : plan.mode().minutesForApproved(approved);
     }
 }

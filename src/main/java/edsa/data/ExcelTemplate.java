@@ -41,11 +41,15 @@ public final class ExcelTemplate {
                             List.of("S003", "Example Student Three", "s003@example.edu", "ECE", "3", "B")));
 
             sheet(workbook, ExcelWorkbookReader.FACULTY, header,
-                    List.of("Faculty ID", "Name", "Email", "Department", "Available"),
+                    List.of("Faculty ID", "Name", "Email", "Department", "Available",
+                            "Designation", "Seniority"),
                     List.of(
-                            List.of("F01", "Example Faculty One", "f01@example.edu", "CSE", "yes"),
-                            List.of("F02", "Example Faculty Two", "f02@example.edu", "ECE", "yes"),
-                            List.of("F03", "Example Faculty Three", "f03@example.edu", "ME", "no")));
+                            List.of("F01", "Example Faculty One", "f01@example.edu", "CSE", "yes",
+                                    "PROFESSOR", ""),
+                            List.of("F02", "Example Faculty Two", "f02@example.edu", "ECE", "yes",
+                                    "ASSOCIATE_PROFESSOR", ""),
+                            List.of("F03", "Example Faculty Three", "f03@example.edu", "ME", "no",
+                                    "ASSISTANT_PROFESSOR_I", "")));
 
             sheet(workbook, ExcelWorkbookReader.ROOMS, header,
                     List.of("Room ID", "Name", "Building", "Capacity", "Available"),
@@ -102,6 +106,11 @@ public final class ExcelTemplate {
                 "             Email is optional but is what the Accounts page creates a sign-in account",
                 "             from, so fill it in for every professor who needs access. One address per",
                 "             person: a repeated or malformed address is reported with its row.",
+                "             Designation is the rank, and decides how large a share of invigilation the",
+                "             allocator asks of somebody. The ranks the office has configured are listed on",
+                "             the Duties page; an unrecognised one is imported and reported there rather",
+                "             than rejected. Seniority is optional and overrides the designation where a",
+                "             title does not reflect where somebody actually sits.",
                 "Rooms        Room ID, Building and Capacity are required. Capacity is a whole number of seats",
                 "             and decides how many students the room may hold. Available accepts yes or no.",
                 "Subjects     Subject Code, Subject Name and Department are required. Semester is optional.",

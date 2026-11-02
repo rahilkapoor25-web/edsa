@@ -49,7 +49,7 @@ public class UserAdminController {
                          @RequestParam(defaultValue = "PROFESSOR") String role,
                          RedirectAttributes flash) {
         try {
-            accounts.register(email, password, displayName, "ADMIN".equals(role) ? "ADMIN" : "PROFESSOR");
+            accounts.register(email, password, displayName, roleOf(role));
             flash.addFlashAttribute("notice", "Created an account for " + email.trim().toLowerCase());
         } catch (IllegalArgumentException e) {
             flash.addFlashAttribute("error", e.getMessage());
@@ -93,6 +93,23 @@ public class UserAdminController {
             flash.addFlashAttribute("error", e.getMessage());
         }
         return "redirect:/users";
+    }
+
+    /**
+     * The role to create, from the three the application recognises.
+     *
+     * <p>Anything unrecognised becomes a professor rather than an error. The field comes from a
+     * select on the page, so a value outside the list arrives only from a hand-made request, and
+     * the least-privileged reading of one of those is the right one.
+     */
+    private static String roleOf(String requested) {
+        if ("ADMIN".equalsIgnoreCase(requested)) {
+            return "ADMIN";
+        }
+        if ("COORDINATOR".equalsIgnoreCase(requested)) {
+            return "COORDINATOR";
+        }
+        return "PROFESSOR";
     }
 
     private void populate(Model model) {

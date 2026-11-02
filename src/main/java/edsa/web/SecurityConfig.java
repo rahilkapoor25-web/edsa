@@ -37,6 +37,13 @@ import jakarta.servlet.http.HttpServletResponse;
  * Real authentication: accounts come from the database and passwords are checked against a
  * BCrypt hash.
  *
+ * <p>Three roles. ADMIN may do everything, including creating accounts and approving the
+ * substitutions and exemptions that move points. COORDINATOR may run the timetable — change
+ * timings, review and approve duty allocations — and nothing else. PROFESSOR may offer their own
+ * duties, volunteer for other people's, and spend their own points. Every one of those checks is
+ * made again in the service that performs the action, against the faculty record the account is
+ * tied to, so a route reached by hand is refused exactly as a hidden button would have been.
+ *
  * <p>Everything is protected except the login page and the stylesheet. CSRF protection is on
  * for every state-changing request, the session id is replaced on login so a fixed session
  * cannot be reused, and logging out invalidates the session and clears its cookie, which is
@@ -139,6 +146,12 @@ public class SecurityConfig {
                         // link's random single-use secret is the credential.
                         .requestMatchers("/login", "/activate", "/css/**", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/users/**", "/users").hasRole("ADMIN")
+                        // Timing is a coordinator's job as much as an administrator's, which is
+                        // the reason the role exists: an office can let somebody run the
+                        // timetable without also letting them create accounts. Declared here as
+                        // well as on the controller methods, so a route added later without an
+                        // annotation is still refused rather than quietly public.
+                        .requestMatchers("/timings/**", "/timings").hasAnyRole("ADMIN", "COORDINATOR")
                         .anyRequest().authenticated())
                 .formLogin(login -> login
                         .loginPage("/login")

@@ -1142,3 +1142,135 @@ button.session__logout:hover {
     white-space: nowrap;
     border: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Duties, timings, substitutions and points.
+
+   Four pages that are mostly tables of things awaiting a decision, so almost
+   all of this is small additions to what the tables already do: one more badge
+   tone, a bar for comparing workloads, and inputs small enough to sit inside a
+   table cell. Nothing here introduces a second visual language.
+   --------------------------------------------------------------------------- */
+
+/* A state that is neither good, bad, nor owed: as declared, withdrawn, expired. */
+.badge--muted {
+    border-color: var(--line-strong);
+    background: var(--wash);
+    color: var(--ink-500);
+}
+
+/* Comparing one invigilator's duties against everybody else's. Deliberately a
+   bar and not a number: the question "is this even?" is answered by looking at
+   a column of bars, and by reading a column of figures only with effort. */
+.bar {
+    display: block;
+    width: 100%;
+    min-width: 90px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--line);
+    overflow: hidden;
+}
+
+.bar__fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--green-500);
+}
+
+/* Named is-over / is-under rather than bar__fill--over: a double underscore is
+   Thymeleaf's preprocessing delimiter, so a BEM modifier written inside a
+   th:classappend expression is parsed as a directive and the page dies
+   mid-render. The modifier lives on the same element, so these stay specific. */
+.bar__fill.is-over {
+    background: var(--amber-300);
+}
+
+.bar__fill.is-under {
+    background: var(--ink-400);
+}
+
+.gap--over {
+    color: var(--amber-700);
+    font-weight: 600;
+}
+
+.gap--under {
+    color: var(--ink-500);
+}
+
+.is-credit {
+    color: var(--green-600);
+    font-weight: 600;
+}
+
+.is-debit {
+    color: var(--ink-700);
+}
+
+/* A figure that should stop somebody: an unstaffed room is the one number on
+   the Duties page that cannot be left alone. */
+.stat__value.is-bad {
+    color: var(--red-600);
+}
+
+.is-bad-row > td {
+    background: #fdf6f5;
+}
+
+/* A column holding a little form rather than a value. Without a width of its own
+   the browser gives it whatever is left over, the fields wrap one per line and
+   every row in the table grows to match the tallest. */
+.is-controls {
+    min-width: 330px;
+}
+
+/* A form that lives inside a table cell: the fields sit on one line and wrap
+   onto a second rather than stretching the column. */
+.inline-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.input--tiny {
+    width: auto;
+    min-width: 92px;
+    max-width: 170px;
+    padding: 5px 8px;
+    font-size: 13px;
+}
+
+/* Several little forms in one cell — approve, undo — stacked on a narrow screen
+   and side by side when there is room. */
+.row-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 720px) {
+    .inline-form,
+    .row-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .input--tiny {
+        max-width: none;
+        width: 100%;
+    }
+
+    /* On a phone the fields stack anyway, so the reserved width would only force
+       the table to scroll sideways. */
+    .is-controls {
+        min-width: 0;
+    }
+
+    .bar {
+        min-width: 60px;
+    }
+}
