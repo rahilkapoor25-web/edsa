@@ -29,6 +29,15 @@
     --line-strong: #d2d7de;
     --wash: #f8f9fb;
 
+    /* Headline numbers, and the tints behind status badges */
+    --figure: var(--navy-900);
+    --green-wash: #eefaf3;
+    --red-wash: #fdf2f1;
+    --amber-wash: #fdf6e8;
+    --stripe: #eceef1;
+
+    color-scheme: light;
+
     /* Type */
     --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -41,6 +50,33 @@
     --card-padding: 26px 28px;
 }
 
+/* Set on <html> by the script in layout.html: the reader's choice, else their system's. */
+:root[data-theme="dark"] {
+    --ink-900: #e6e9ef;
+    --ink-700: #c3c9d4;
+    --ink-500: #8d96a7;
+    --ink-400: #667085;
+
+    --red-600: #f97066;
+    --red-400: #7a2e29;
+    --amber-700: #f5b94a;
+    --amber-300: #6b4f1d;
+
+    --surface: #151b26;
+    --canvas: #0d121b;
+    --line: #243041;
+    --line-strong: #334056;
+    --wash: #1a2230;
+
+    --figure: var(--ink-900);
+    --green-wash: #10291e;
+    --red-wash: #2c1614;
+    --amber-wash: #2a2010;
+    --stripe: #222b3a;
+
+    color-scheme: dark;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -49,7 +85,11 @@ html {
     -webkit-text-size-adjust: 100%;
 }
 
+/* The footer sits at the bottom of the window even when a page is short. */
 body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
     margin: 0;
     background: var(--canvas);
     color: var(--ink-900);
@@ -57,6 +97,10 @@ body {
     font-size: 15px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+}
+
+body > main {
+    flex: 1 0 auto;
 }
 
 a {
@@ -108,7 +152,7 @@ button:focus-visible {
     width: 14px;
     height: 14px;
     border-radius: 3px;
-    background: var(--navy-900);
+    background: var(--figure);
     box-shadow: inset -4px -4px 0 0 var(--green-500);
 }
 
@@ -266,6 +310,14 @@ a.tab:hover {
     border-color: var(--green-500);
 }
 
+.button:disabled,
+.button:disabled:hover {
+    background: var(--line-strong);
+    border-color: var(--line-strong);
+    color: var(--ink-500);
+    cursor: not-allowed;
+}
+
 /* ---------- Page body ---------- */
 
 .page {
@@ -303,7 +355,7 @@ a.tab:hover {
 .stat__value {
     display: block;
     margin-top: 12px;
-    color: var(--navy-900);
+    color: var(--figure);
     font-family: var(--font-mono);
     font-size: 34px;
     font-weight: 500;
@@ -371,7 +423,7 @@ a.tab:hover {
 }
 
 .table th {
-    padding: 12px 20px;
+    padding: 12px 16px;
     background: var(--wash);
     border-bottom: 1px solid var(--line);
     color: var(--ink-500);
@@ -384,7 +436,7 @@ a.tab:hover {
 }
 
 .table td {
-    padding: 13px 20px;
+    padding: 13px 16px;
     border-bottom: 1px solid var(--line);
     color: var(--ink-700);
     vertical-align: baseline;
@@ -393,6 +445,17 @@ a.tab:hover {
 
 .table tr:last-child td {
     border-bottom: none;
+}
+
+/* The outer columns line up with the panel title above them. */
+.table th:first-child,
+.table td:first-child {
+    padding-left: 28px;
+}
+
+.table th:last-child,
+.table td:last-child {
+    padding-right: 28px;
 }
 
 .table tbody tr:hover td {
@@ -452,7 +515,7 @@ a.tab:hover {
 }
 
 .room__seats {
-    color: var(--navy-900);
+    color: var(--figure);
     font-family: var(--font-mono);
     font-size: 20px;
     font-variant-numeric: tabular-nums;
@@ -537,20 +600,29 @@ a.tab:hover {
 
 .input--file {
     padding: 8px 10px;
+    color: var(--ink-500);
     font-size: 14px;
+}
+
+.input--file::file-selector-button {
+    margin-right: 12px;
+    padding: 5px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--wash);
+    color: var(--ink-900);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.input--file::file-selector-button:hover {
+    border-color: var(--ink-400);
 }
 
 .select {
     min-width: 220px;
-}
-
-.or {
-    margin: 22px 0;
-    color: var(--ink-400);
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-align: center;
-    text-transform: uppercase;
 }
 
 .actions {
@@ -596,27 +668,27 @@ a.tab:hover {
 
 .badge--pass {
     border-color: var(--green-300);
-    background: #eefaf3;
+    background: var(--green-wash);
     color: var(--green-600);
 }
 
 .badge--fail {
     border-color: var(--red-400);
-    background: #fdf2f1;
+    background: var(--red-wash);
     color: var(--red-600);
 }
 
 /* Awaiting a human decision: not a pass, not a failure. */
 .badge--wait {
     border-color: var(--amber-300);
-    background: #fdf6e8;
+    background: var(--amber-wash);
     color: var(--amber-700);
 }
 
 /* A review deadline that went by. Still pending, and still changing nothing. */
 .badge--late {
     border-color: var(--amber-300);
-    background: #fdf6e8;
+    background: var(--amber-wash);
     color: var(--amber-700);
     font-weight: 700;
 }
@@ -644,7 +716,7 @@ a.tab:hover {
 
 .figure__value {
     margin: 8px 0 0;
-    color: var(--navy-900);
+    color: var(--figure);
     font-size: 26px;
     font-variant-numeric: tabular-nums;
 }
@@ -674,8 +746,15 @@ a.tab:hover {
     grid-template-columns: 1fr 1fr;
 }
 
+/* One gap between everything stacked on a page. Side-by-side panels in .columns get theirs
+   from the grid, so they keep their tops level. */
+.page > * + *,
 .panel + .panel {
     margin-top: 20px;
+}
+
+.columns > .panel {
+    margin-top: 0;
 }
 
 .hero--short {
@@ -683,12 +762,6 @@ a.tab:hover {
 }
 
 /* ---------- Exam modes, problems, upload ---------- */
-
-.subhead {
-    margin: 0 0 6px;
-    font-size: 15px;
-    font-weight: 600;
-}
 
 .modes__set {
     margin: 0 0 16px;
@@ -730,8 +803,220 @@ a.tab:hover {
     font-size: 13px;
 }
 
-.mode__current {
+.mode__hint {
+    margin: 14px 0 0;
+}
+
+/* Locked until a verified workbook is loaded. */
+.modes__set:disabled .mode {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.modes__set:disabled .mode:hover {
+    background: none;
+}
+
+.loaded {
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    border: 1px solid var(--green-300);
+    border-radius: var(--radius-sm);
+    background: var(--green-wash);
+    color: var(--ink-700);
+    font-size: 13px;
+}
+
+.loaded strong {
+    color: var(--ink-900);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* ── Workbook upload: the sheets it needs, its check, the quieter alternatives ── */
+
+.sheets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
     margin: 0 0 20px;
+}
+
+.sheets .label {
+    flex-basis: 100%;
+    margin-bottom: 2px;
+}
+
+.check {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--wash);
+    font-size: 13px;
+}
+
+.check--pass {
+    border-color: var(--green-300);
+    background: var(--green-wash);
+}
+
+.check--fail {
+    border-color: var(--red-400);
+    background: var(--red-wash);
+}
+
+.check__title {
+    margin: 0;
+    color: var(--ink-900);
+    font-weight: 600;
+}
+
+.check--pass .check__title {
+    color: var(--green-600);
+}
+
+.check--fail .check__title {
+    color: var(--red-600);
+}
+
+.check__list {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    color: var(--ink-700);
+}
+
+.check + .button--full {
+    margin-top: 16px;
+}
+
+.more {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+}
+
+.more form {
+    display: contents;
+}
+
+.more a,
+.link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-500);
+    font: inherit;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.more a:hover,
+.link:hover {
+    color: var(--green-600);
+    text-decoration: underline;
+}
+
+.notice--success {
+    border-color: var(--green-300);
+    background: var(--green-wash);
+}
+
+.notice--success a {
+    margin-left: 6px;
+    color: var(--green-600);
+    font-weight: 600;
+}
+
+/* ── Duty points ── */
+
+.points__total {
+    font-weight: 600;
+}
+
+.points__total.is-up {
+    color: var(--green-600);
+}
+
+.points__total.is-down {
+    color: var(--red-600);
+}
+
+.points__off {
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.points__email {
+    font-size: 12.5px;
+}
+
+/* ── Pop-ups: the CSV upload and the confirmation dialog ── */
+
+.sheet {
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 22px 24px 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink-900);
+    box-shadow: 0 24px 60px rgba(10, 23, 48, 0.28);
+}
+
+.sheet::backdrop {
+    background: rgba(10, 23, 48, 0.45);
+}
+
+.sheet__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 6px;
+}
+
+.sheet__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.sheet__close {
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--ink-500);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sheet__close:hover {
+    color: var(--ink-900);
+}
+
+.sheet .muted {
+    margin: 0 0 18px;
+}
+
+.sheet__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.confirm__text {
+    margin: 0;
+    font-size: 15px;
 }
 
 .problems {
@@ -766,6 +1051,37 @@ button.session__logout {
 
 button.session__logout:hover {
     color: var(--ink-900);
+}
+
+.masthead__end {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink-700);
+    cursor: pointer;
+}
+
+.theme-toggle:hover {
+    background: var(--wash);
+    color: var(--ink-900);
+}
+
+.theme-toggle[hidden],
+:root[data-theme="dark"] .theme-toggle__moon,
+:root:not([data-theme="dark"]) .theme-toggle__sun {
+    display: none;
 }
 
 /* ---------- Sign in ---------- */
@@ -876,14 +1192,43 @@ button.session__logout:hover {
         display: none;
     }
 
+    /* Keep the header on one line: a long address shortens rather than wrapping. */
+    .masthead__end,
+    .session {
+        min-width: 0;
+        gap: 10px;
+    }
+
+    .session__user {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    button.session__logout {
+        padding-left: 10px;
+        white-space: nowrap;
+    }
+
     .hero {
         padding: 40px 0 72px;
     }
 
     .table th,
     .table td {
-        padding-left: 18px;
-        padding-right: 18px;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .table th:first-child,
+    .table td:first-child {
+        padding-left: 20px;
+    }
+
+    .table th:last-child,
+    .table td:last-child {
+        padding-right: 20px;
     }
 
     .panel__head,
@@ -1039,7 +1384,7 @@ button.session__logout:hover {
 /* A grid position the room does not seat at all. */
 .seatgrid__seat.is-nonseat {
     background: repeating-linear-gradient(45deg,
-        var(--wash), var(--wash) 6px, #eceef1 6px, #eceef1 12px);
+        var(--wash), var(--wash) 6px, var(--stripe) 6px, var(--stripe) 12px);
     border-color: var(--line);
 }
 

@@ -409,7 +409,8 @@ class SeatingMatrixTest {
                         .map(student -> (edsa.core.Student) student)
                         .toList(),
                 List.of(edsa.core.Room.ofCapacity("R20", "Small Hall", 20, "Block A")),
-                List.of(new edsa.core.Faculty("F1", "Faculty One", "CSE", false, java.util.Set.of())),
+                List.of(new edsa.core.Faculty("F1", "Faculty One", "CSE", edsa.core.Post.PROFESSOR),
+                        new edsa.core.Faculty("F2", "Faculty Two", "CSE", edsa.core.Post.ASSISTANT_PROFESSOR)),
                 List.of(new edsa.core.Exam("E1", "CS301", "Data Structures",
                         java.time.LocalDate.of(2026, 11, 10), java.time.LocalTime.of(9, 0), null)));
 

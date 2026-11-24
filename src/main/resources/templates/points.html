@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Points', 'points', ~{:: main})}">
+<body>
+
+<main th:fragment="main">
+    <div class="page page--plain shell">
+
+        <div class="page__head">
+            <div>
+                <p class="label">Administration</p>
+                <h1 class="page__title">Duty points</h1>
+            </div>
+            <p class="page__aside">
+                <span class="badge badge--fail">−1</span> each duty missed through a confirmed absence
+                &nbsp; <span class="badge badge--pass">+1</span> each duty covered for a colleague
+            </p>
+        </div>
+
+        <section class="card empty" th:if="${#lists.isEmpty(teachers)}">
+            <h2 class="empty__title">No teachers yet</h2>
+            <p class="empty__note">Generate a schedule on Data and Run and every teacher will be listed here.</p>
+            <a class="button" th:href="@{/}">Go to Data and Run</a>
+        </section>
+
+        <section class="panel" th:unless="${#lists.isEmpty(teachers)}">
+            <div class="panel__head">
+                <h2 class="panel__title">Teachers</h2>
+                <span class="label">
+                    <span class="mono" th:text="${#lists.size(teachers)}">8</span> teachers · highest first
+                </span>
+            </div>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Teacher</th>
+                        <th>Id</th>
+                        <th>Department</th>
+                        <th>Post</th>
+                        <th>Email</th>
+                        <th class="is-numeric">Duties</th>
+                        <th class="is-numeric">Covered</th>
+                        <th class="is-numeric">Missed</th>
+                        <th class="is-numeric">Points</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="teacher : ${teachers}">
+                        <td class="is-primary">
+                            <span th:text="${teacher.name()}">Dr. Meera Nair</span>
+                            <span class="muted points__off" th:unless="${teacher.available()}">· not on the roster</span>
+                        </td>
+                        <td><span class="code" th:text="${teacher.id()}">F01</span></td>
+                        <td th:text="${teacher.department() != null} ? ${teacher.department()} : '—'">CSE</td>
+                        <td th:text="${teacher.post() != null} ? ${teacher.post()} : '—'">Professor</td>
+                        <td class="mono points__email" th:text="${teacher.email() != null} ? ${teacher.email()} : '—'">a@b.edu</td>
+                        <td class="is-numeric" th:text="${teacher.duties()}">1</td>
+                        <td class="is-numeric" th:text="${teacher.covered()}">0</td>
+                        <td class="is-numeric" th:text="${teacher.missed()}">0</td>
+                        <td class="is-numeric">
+                            <span class="points__total"
+                                  th:classappend="${teacher.points() > 0} ? 'is-up' : (${teacher.points() < 0} ? 'is-down' : '')"
+                                  th:text="${teacher.signedPoints()}">0</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel__head">
+                <h2 class="panel__title">History</h2>
+                <span class="label"><span class="mono" th:text="${#lists.size(history)}">0</span> entries · newest first</span>
+            </div>
+            <p class="panel__footnote" th:if="${#lists.isEmpty(history)}">
+                Nothing yet. Points are recorded when an absence is confirmed on
+                <a th:href="@{/disruption}">Disruption</a>.
+            </p>
+            <div class="table-wrap" th:unless="${#lists.isEmpty(history)}">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Teacher</th>
+                        <th>Points</th>
+                        <th>What happened</th>
+                        <th class="is-numeric">Absence</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="entry : ${history}">
+                        <td class="mono" th:text="${#temporals.format(entry.recordedAt(), 'yyyy-MM-dd HH:mm')}">2026-11-19 10:00</td>
+                        <td>
+                            <span th:text="${entry.facultyName()}">Dr. Meera Nair</span>
+                            <span class="code" th:text="${entry.facultyId()}">F01</span>
+                        </td>
+                        <td>
+                            <span class="badge" th:classappend="${entry.points() > 0} ? 'badge--pass' : 'badge--fail'"
+                                  th:text="${entry.signed()}">−1</span>
+                        </td>
+                        <td class="is-primary" th:text="${entry.reason()}">Missed CS301 in R101</td>
+                        <td class="is-numeric mono" th:text="${entry.leaveRequestId() != null} ? '#' + ${entry.leaveRequestId()} : '—'">#1</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+</body>
+</html>

@@ -66,7 +66,7 @@
                         </dd>
                     </div>
                     <div class="figure">
-                        <dt class="label">Invigilator</dt>
+                        <dt class="label">Invigilators</dt>
                         <dd class="figure__value" th:text="${focus.invigilatorNames()}">Dr Name (F01)</dd>
                     </div>
                 </dl>
@@ -241,8 +241,7 @@
                                 <th scope="col">Room</th>
                                 <th scope="col">Building</th>
                                 <th scope="col" class="is-numeric">Seated</th>
-                                <th scope="col" class="is-numeric">Capacity</th>
-                                <th scope="col">Invigilator</th>
+                                <th scope="col">Invigilators</th>
                                 <th scope="col"></th>
                             </tr>
                             </thead>
@@ -255,8 +254,8 @@
                                 <td class="is-primary" th:text="${sitting.slot().getPaperName()}">Data Structures</td>
                                 <td><span class="code" th:text="${sitting.room().getId()}">LH-01</span></td>
                                 <td th:text="${sitting.room().getBuilding()}">Block A</td>
-                                <td class="is-numeric" th:text="${sitting.seated()}">30</td>
-                                <td class="is-numeric" th:text="${sitting.room().capacity()}">30</td>
+                                <td class="is-numeric"
+                                    th:text="${sitting.seated()} + ' / ' + ${sitting.room().capacity()}">30 / 30</td>
                                 <td th:text="${sitting.invigilatorNames()}">Dr Name (F01)</td>
                                 <td class="is-action">
                                     <a class="button button--quiet button--small"

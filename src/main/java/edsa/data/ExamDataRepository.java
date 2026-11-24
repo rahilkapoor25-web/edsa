@@ -3,6 +3,7 @@ package edsa.data;
 import edsa.core.Exam;
 import edsa.core.ExamData;
 import edsa.core.Faculty;
+import edsa.core.Post;
 import edsa.core.Room;
 import edsa.core.Student;
 
@@ -50,10 +51,11 @@ public class ExamDataRepository {
                     student.getId(), student.getName(), student.getDepartment());
         }
         for (Faculty member : workbook.faculty()) {
-            jdbc.update("INSERT INTO faculty (id, name, email, department, available) VALUES (?, ?, ?, ?, ?)",
+            jdbc.update("INSERT INTO faculty (id, name, email, department, available, post) VALUES (?, ?, ?, ?, ?, ?)",
                     member.getId(), member.getName(),
                     workbook.facultyEmails().get(member.getId()), member.getDepartment(),
-                    workbook.facultyAvailability().getOrDefault(member.getId(), true));
+                    workbook.facultyAvailability().getOrDefault(member.getId(), true),
+                    member.getPost() == null ? null : member.getPost().label());
         }
         for (Room room : workbook.rooms()) {
             jdbc.update("INSERT INTO room (id, name, building, capacity, available) VALUES (?, ?, ?, ?, ?)",
@@ -111,14 +113,17 @@ public class ExamDataRepository {
                         rs.getInt("capacity"), rs.getString("building")));
 
         List<Faculty> faculty = jdbc.query(
-                "SELECT id, name, department FROM faculty WHERE available = TRUE ORDER BY id",
+                "SELECT id, name, department, post FROM faculty WHERE available = TRUE ORDER BY id",
                 (rs, row) -> new Faculty(rs.getString("id"), rs.getString("name"), rs.getString("department"),
-                        false, Set.of()));
+                        Post.of(rs.getString("post"))));
 
         Map<String, String> subjectNames = new LinkedHashMap<>();
-        jdbc.query("SELECT code, name FROM subject",
-                (org.springframework.jdbc.core.RowCallbackHandler) rs ->
-                        subjectNames.put(rs.getString("code"), rs.getString("name")));
+        Map<String, String> subjectDepartments = new LinkedHashMap<>();
+        jdbc.query("SELECT code, name, department FROM subject",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
+                    subjectNames.put(rs.getString("code"), rs.getString("name"));
+                    subjectDepartments.put(rs.getString("code"), rs.getString("department"));
+                });
 
         List<Exam> exams = new ArrayList<>(jdbc.query(
                 "SELECT id, subject_code, exam_date, permitted_start, duration_minutes FROM exam ORDER BY exam_date, id",
@@ -127,9 +132,10 @@ public class ExamDataRepository {
                     int duration = rs.getInt("duration_minutes");
                     LocalDate date = rs.getDate("exam_date").toLocalDate();
                     LocalTime permitted = start == null ? null : start.toLocalTime();
-                    return new Exam(rs.getString("id"), rs.getString("subject_code"),
-                            subjectNames.getOrDefault(rs.getString("subject_code"), rs.getString("subject_code")),
-                            date, permitted, rs.wasNull() || duration == 0 ? null : duration);
+                    Integer override = rs.wasNull() || duration == 0 ? null : duration;
+                    String code = rs.getString("subject_code");
+                    return new Exam(rs.getString("id"), code, subjectNames.getOrDefault(code, code),
+                            date, permitted, override, subjectDepartments.get(code));
                 }));
 
         return new ExamData(students, rooms, faculty, exams);

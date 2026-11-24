@@ -256,11 +256,17 @@ class DisruptionPageTest {
 
     @Test
     @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
-    void confirmingAnAbsenceForSomebodyWithNoDutiesChangesNothing() throws Exception {
-        String idle = workspace.result().plan().workloads().stream()
-                .filter(workload -> workload.duties() == 0)
-                .findFirst().orElseThrow().member().getId();
-        LeaveRequest recorded = recordWholeSession(idle);
+    void confirmingAnAbsenceThatTouchesNoDutyChangesNothing() throws Exception {
+        // Two invigilators per room keep everybody busy in the sample, so the absence instead
+        // falls on a day with no exams at all.
+        mvc.perform(post("/disruption/leave").with(csrf())
+                        .with(user("boss@thapar.edu").roles("ADMIN"))
+                        .param("facultyId", someoneOnDuty())
+                        .param("from", "2026-12-25T09:00")
+                        .param("to", "2026-12-25T17:00")
+                        .param("reason", "Holiday"))
+                .andExpect(redirectedUrl("/disruption"));
+        LeaveRequest recorded = requests.all().get(0);
 
         mvc.perform(post("/disruption/leave/" + recorded.id() + "/confirm").with(csrf()));
 

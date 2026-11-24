@@ -17,9 +17,12 @@ public final class PlanChecker {
         return new PlanChecker(List.of(
                 new ExamDurationConstraint(),
                 new RoomCapacityConstraint(config),
-                new RoomOverlapConstraint(),
+                new RoomOverlapConstraint(config),
                 new StudentConflictConstraint(),
-                new FacultyConflictConstraint()));
+                new FacultyConflictConstraint(),
+                new InvigilatorsPerRoomConstraint(),
+                new SeniorInEveryRoomConstraint(),
+                new DepartmentConflictConstraint()));
     }
 
     public static PlanChecker standard() {

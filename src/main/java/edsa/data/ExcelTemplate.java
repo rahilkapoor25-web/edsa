@@ -41,11 +41,13 @@ public final class ExcelTemplate {
                             List.of("S003", "Example Student Three", "s003@example.edu", "ECE", "3", "B")));
 
             sheet(workbook, ExcelWorkbookReader.FACULTY, header,
-                    List.of("Faculty ID", "Name", "Email", "Department", "Available"),
+                    List.of("Faculty ID", "Name", "Email", "Department", "Post", "Available"),
                     List.of(
-                            List.of("F01", "Example Faculty One", "f01@example.edu", "CSE", "yes"),
-                            List.of("F02", "Example Faculty Two", "f02@example.edu", "ECE", "yes"),
-                            List.of("F03", "Example Faculty Three", "f03@example.edu", "ME", "no")));
+                            List.of("F01", "Example Faculty One", "f01@example.edu", "CSE", "Professor", "yes"),
+                            List.of("F02", "Example Faculty Two", "f02@example.edu", "ECE", "Professor", "yes"),
+                            List.of("F03", "Example Faculty Three", "f03@example.edu", "ME", "Associate Professor", "yes"),
+                            List.of("F04", "Example Faculty Four", "f04@example.edu", "ME", "Assistant Professor", "yes"),
+                            List.of("F05", "Example Faculty Five", "f05@example.edu", "CSE", "Assistant Professor", "no")));
 
             sheet(workbook, ExcelWorkbookReader.ROOMS, header,
                     List.of("Room ID", "Name", "Building", "Capacity", "Available"),
@@ -74,7 +76,7 @@ public final class ExcelTemplate {
                     List.of(
                             List.of("E1", "CS301", "2026-11-10", "09:00", ""),
                             List.of("E2", "CS302", "2026-11-11", "09:00", ""),
-                            List.of("E3", "EC301", "2026-11-10", "", "")));
+                            List.of("E3", "EC301", "2026-11-10", "14:00", "")));
 
             workbook.write(out);
             return out.toByteArray();
@@ -96,8 +98,12 @@ public final class ExcelTemplate {
                 "Replace the example rows on each worksheet with your own records, then upload this one file.",
                 "The example rows are invented for illustration; they are not real people, rooms or papers.",
                 "",
-                "Students     Student ID, Name and Department are required. Email, Year and Section are optional.",
-                "Faculty      Faculty ID, Name and Department are required. Available accepts yes or no;",
+                "Students     Student ID, Name and Department are required. Email, Year and Section are optional;",
+                "             a filled-in Email must be a valid, unused address and Year a whole number.",
+                "Faculty      Faculty ID, Name, Department and Post are required. Post is Professor (senior),",
+                "             Associate Professor or Assistant Professor (both junior). Every room gets two",
+                "             invigilators, at least one a Professor, and nobody invigilates a paper of their",
+                "             own department. Available accepts yes or no;",
                 "             blank counts as yes. An unavailable member is imported but never put on duty.",
                 "             Email is optional but is what the Accounts page creates a sign-in account",
                 "             from, so fill it in for every professor who needs access. One address per",
@@ -105,10 +111,12 @@ public final class ExcelTemplate {
                 "Rooms        Room ID, Building and Capacity are required. Capacity is a whole number of seats",
                 "             and decides how many students the room may hold. Available accepts yes or no.",
                 "Subjects     Subject Code, Subject Name and Department are required. Semester is optional.",
-                "Enrollments  One row per student per paper. Both ids must exist on their own worksheets.",
-                "Exams        Exam ID, Subject Code and Date are required. Date is yyyy-mm-dd.",
-                "             Start Time (hh:mm) fixes when the paper starts; leave it blank to let the",
-                "             scheduler choose the earliest time that works.",
+                "             The Department is the paper's: that department's staff never invigilate it.",
+                "Enrollments  One row per student per paper. Both ids must exist on their own worksheets,",
+                "             and every student needs at least one row.",
+                "Exams        Exam ID, Subject Code, Date and Start Time are required. Date is yyyy-mm-dd",
+                "             and Start Time hh:mm. One exam per subject, and every exam needs students",
+                "             enrolled and must fit in the available rooms' total seats.",
                 "             Duration Minutes lets one Midsem or Endsem paper run longer or shorter than",
                 "             the mode; leave it blank to use the selected mode. A Quiz is always exactly",
                 "             10 minutes, so this column is ignored in Quiz mode. Midsem is 120 minutes and",

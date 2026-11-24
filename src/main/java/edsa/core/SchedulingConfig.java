@@ -9,6 +9,9 @@ import java.time.LocalTime;
  */
 public final class SchedulingConfig {
 
+    /** Every room in use has this many invigilators, at least one of them a Professor. */
+    public static final int INVIGILATORS_PER_ROOM = 2;
+
     private final LocalTime dayStart;
     private final LocalTime dayEnd;
     private final int turnaroundMinutes;

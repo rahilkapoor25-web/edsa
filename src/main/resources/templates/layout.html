@@ -9,6 +9,22 @@
     <link rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" th:href="@{/css/edsa.css}">
+    <!-- Before the first paint, so somebody reading in dark mode never sees a white flash.
+         Their saved choice wins; otherwise the system's preference. -->
+    <script>
+        (function () {
+            var theme = null;
+            try {
+                theme = window.localStorage.getItem('edsa-theme');
+            } catch (e) {
+                // Storage blocked: fall back to the system preference.
+            }
+            if (theme !== 'dark' && theme !== 'light') {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
 </head>
 <body>
 
@@ -21,11 +37,25 @@
             <span class="brand__name">EDSA</span>
             <span class="brand__expansion">Exam Duty &amp; Seating Allocation</span>
         </a>
-        <div class="session" sec:authorize="isAuthenticated()">
-            <span class="session__user mono" sec:authentication="name">coordinator@example.edu</span>
-            <form class="session__logout-form" method="post" th:action="@{/logout}">
-                <button class="session__logout" type="submit">Log out</button>
-            </form>
+        <div class="masthead__end">
+            <div class="session" sec:authorize="isAuthenticated()">
+                <span class="session__user mono" sec:authentication="name">coordinator@example.edu</span>
+                <form class="session__logout-form" method="post" th:action="@{/logout}">
+                    <button class="session__logout" type="submit">Log out</button>
+                </form>
+            </div>
+            <!-- Hidden until the script below can make it work. -->
+            <button class="theme-toggle" type="button" hidden aria-label="Switch to dark mode" title="Switch to dark mode">
+                <svg class="theme-toggle__moon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+                </svg>
+                <svg class="theme-toggle__sun" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/>
+                    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -39,6 +69,8 @@
                th:href="@{/workloads}">Workloads</a>
             <a class="tab" th:classappend="${activeTab == 'disruption'} ? 'tab--active'"
                th:href="@{/disruption}">Disruption</a>
+            <a class="tab" th:classappend="${activeTab == 'points'} ? 'tab--active'"
+               th:href="@{/points}" sec:authorize="hasRole('ADMIN')">Points</a>
             <a class="tab" th:classappend="${activeTab == 'users'} ? 'tab--active'"
                th:href="@{/users}" sec:authorize="hasRole('ADMIN')">Accounts</a>
         </div>
@@ -56,11 +88,56 @@
     </div>
 </footer>
 
+<!-- Asks before something destructive. An in-page dialog rather than window.confirm, which some
+     embedded browsers suppress and answer "no" to — every guarded button then did nothing. -->
+<dialog class="sheet" id="confirm" aria-labelledby="confirm-text">
+    <p class="confirm__text" id="confirm-text">Continue?</p>
+    <div class="sheet__actions">
+        <button class="button button--quiet" type="button" data-answer="no">Cancel</button>
+        <button class="button" type="button" data-answer="yes">Continue</button>
+    </div>
+</dialog>
+
 <!-- Progressive enhancement, and nothing more. Every form here works with JavaScript turned
      off: this only asks before something destructive and stops an impatient second click
      sending the same import twice. There is no framework and no external script. -->
 <script>
     (function () {
+        var dialog = document.getElementById('confirm');
+        var pending = null;
+
+        function ask(question, form, submitter) {
+            if (!dialog || typeof dialog.showModal !== 'function') {
+                if (window.confirm(question)) {
+                    form.dataset.confirmed = 'true';
+                    form.requestSubmit(submitter || null);
+                }
+                return;
+            }
+            pending = { form: form, submitter: submitter || null };
+            document.getElementById('confirm-text').textContent = question;
+            dialog.showModal();
+        }
+
+        if (dialog) {
+            dialog.addEventListener('click', function (event) {
+                var answer = event.target.closest('[data-answer]');
+                if (!answer) {
+                    return;
+                }
+                var chosen = pending;
+                pending = null;
+                dialog.close();
+                if (answer.getAttribute('data-answer') === 'yes' && chosen) {
+                    chosen.form.dataset.confirmed = 'true';
+                    chosen.form.requestSubmit(chosen.submitter);
+                }
+            });
+            dialog.addEventListener('close', function () {
+                pending = null;
+            });
+        }
+
         document.addEventListener('submit', function (event) {
             var form = event.target;
             if (!(form instanceof HTMLFormElement)) {
@@ -68,8 +145,9 @@
             }
 
             var question = form.getAttribute('data-confirm');
-            if (question && !window.confirm(question)) {
+            if (question && form.dataset.confirmed !== 'true') {
                 event.preventDefault();
+                ask(question, form, event.submitter);
                 return;
             }
 
@@ -82,6 +160,7 @@
             var busy = form.getAttribute('data-busy');
             var button = form.querySelector('button[type="submit"]');
             if (busy && button) {
+                button.dataset.label = button.textContent;
                 // After the current tick: disabling a button during its own submit event
                 // cancels the submission in some browsers.
                 window.setTimeout(function () {
@@ -89,6 +168,46 @@
                     button.textContent = busy;
                 }, 0);
             }
+        });
+
+        // Coming back with the Back button restores the page as it was left, mid-submit: unlock
+        // its forms, or every button on it would silently do nothing.
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) {
+                return;
+            }
+            document.querySelectorAll('form[data-submitted], form[data-confirmed]').forEach(function (form) {
+                delete form.dataset.submitted;
+                delete form.dataset.confirmed;
+                var button = form.querySelector('button[type="submit"]');
+                if (button && button.dataset.label) {
+                    button.textContent = button.dataset.label;
+                    button.disabled = false;
+                }
+            });
+        });
+
+        var toggle = document.querySelector('.theme-toggle');
+        if (!toggle) {
+            return;
+        }
+        var root = document.documentElement;
+        function describe() {
+            var text = root.getAttribute('data-theme') === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+            toggle.setAttribute('aria-label', text);
+            toggle.title = text;
+        }
+        describe();
+        toggle.hidden = false;
+        toggle.addEventListener('click', function () {
+            var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', next);
+            try {
+                window.localStorage.setItem('edsa-theme', next);
+            } catch (e) {
+                // Storage blocked: the choice lasts for this page only.
+            }
+            describe();
         });
     })();
 </script>

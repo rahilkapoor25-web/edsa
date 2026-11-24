@@ -27,7 +27,7 @@ class SchedulingTest {
         ExamData data = new ExamData(
                 join(TestData.students("S", 10, "CS301"), TestData.students("T", 10, "EC301")),
                 TestData.rooms(2, 10),
-                TestData.faculty(2),
+                TestData.faculty(4),
                 List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0)),
                         TestData.exam("E2", "EC301", LocalTime.of(9, 0))));
 
@@ -57,20 +57,20 @@ class SchedulingTest {
     @Test
     void aLargeCohortIsSplitAcrossEnoughRooms() {
         ExamData data = new ExamData(TestData.students("S", 75, "CS301"), TestData.rooms(4, 25),
-                TestData.faculty(4), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+                TestData.faculty(6), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
 
         assertTrue(result.isUsable(), String.valueOf(result.problems()));
         assertEquals(75, result.plan().seating().seatedCount());
         assertEquals(3, result.plan().roomsUsed().size());
-        assertEquals(3, result.plan().duties().all().size());
+        assertEquals(6, result.plan().duties().all().size(), "two invigilators in each of the three rooms");
     }
 
     @Test
     void noRoomEverHoldsMoreThanItsCapacity() {
         ExamData data = new ExamData(TestData.students("S", 48, "CS301"), TestData.rooms(3, 20),
-                TestData.faculty(3), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+                TestData.faculty(6), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
 
@@ -85,7 +85,7 @@ class SchedulingTest {
         ExamData data = new ExamData(
                 join(TestData.students("S", 8, "CS301"), TestData.students("T", 8, "EC301")),
                 TestData.rooms(2, 10),
-                TestData.faculty(2),
+                TestData.faculty(4),
                 List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0)),
                         TestData.exam("E2", "EC301", LocalTime.of(9, 0))));
 
@@ -102,7 +102,7 @@ class SchedulingTest {
         ExamData data = new ExamData(
                 join(TestData.students("S", 8, "CS301"), TestData.students("T", 8, "EC301")),
                 TestData.rooms(2, 10),
-                TestData.faculty(2),
+                TestData.faculty(4),
                 List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0)),
                         TestData.exam("E2", "EC301", LocalTime.of(9, 0))));
 
@@ -120,9 +120,9 @@ class SchedulingTest {
     }
 
     @Test
-    void aSecondPaperMayStartTheMomentTheFirstEnds() {
+    void aSecondPaperMayStartTheMomentTheFirstEndsInAnotherRoom() {
         List<Student> shared = TestData.students("S", 5, "CS301", "EC301");
-        ExamData data = new ExamData(shared, TestData.rooms(1, 10), TestData.faculty(1),
+        ExamData data = new ExamData(shared, TestData.rooms(2, 10), TestData.faculty(2),
                 List.of(TestData.exam("E1", "CS301", null), TestData.exam("E2", "EC301", null)));
 
         PlanningResult result = planner.plan(data, ExamMode.QUIZ);
@@ -130,6 +130,59 @@ class SchedulingTest {
         assertTrue(result.isUsable(), String.valueOf(result.problems()));
         assertEquals(LocalTime.of(9, 0), result.plan().schedule().get(0).getStartTime());
         assertEquals(LocalTime.of(9, 10), result.plan().schedule().get(1).getStartTime());
+    }
+
+    @Test
+    void aRoomGetsItsTurnaroundBeforeTheNextSitting() {
+        List<Student> shared = TestData.students("S", 5, "CS301", "EC301");
+        ExamData data = new ExamData(shared, TestData.rooms(1, 10), TestData.faculty(2),
+                List.of(TestData.exam("E1", "CS301", null), TestData.exam("E2", "EC301", null)));
+
+        PlanningResult result = planner.plan(data, ExamMode.QUIZ);
+
+        assertTrue(result.isUsable(), String.valueOf(result.problems()));
+        // 09:00-09:10, then the default 30-minute turnaround.
+        assertEquals(LocalTime.of(9, 40), result.plan().schedule().get(1).getStartTime());
+    }
+
+    @Test
+    void aCohortGoesToTheSmallestRoomThatSeatsItSpacedOut() {
+        ExamData data = new ExamData(TestData.students("S", 10, "CS301"),
+                List.of(Room.ofCapacity("BIG", "Big", 60, "A"), Room.ofCapacity("MID", "Mid", 30, "A"),
+                        Room.ofCapacity("SMALL", "Small", 25, "A")),
+                TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+
+        PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
+
+        assertTrue(result.isUsable(), String.valueOf(result.problems()));
+        assertEquals(List.of("SMALL"), result.plan().roomsUsed().stream().map(Room::getId).toList());
+    }
+
+    @Test
+    void aCohortTooBigToSpaceOutIsPackedIntoTheSmallestRoomThatHoldsIt() {
+        ExamData data = new ExamData(TestData.students("S", 24, "CS301"),
+                List.of(Room.ofCapacity("MID", "Mid", 30, "A"), Room.ofCapacity("SMALL", "Small", 25, "A")),
+                TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+
+        PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
+
+        assertTrue(result.isUsable(), String.valueOf(result.problems()));
+        assertEquals(List.of("SMALL"), result.plan().roomsUsed().stream().map(Room::getId).toList());
+        assertEquals(24, result.plan().seating().seatedCount());
+    }
+
+    @Test
+    void studentsSitOnACheckerboardWhenTheRoomHasSpace() {
+        ExamData data = new ExamData(TestData.students("S", 10, "CS301"), TestData.rooms(1, 60),
+                TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+
+        PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
+
+        assertTrue(result.isUsable(), String.valueOf(result.problems()));
+        List<Seat> seats = result.plan().seating().seatsFor("E1");
+        assertEquals(10, seats.size());
+        // Nobody beside, in front of or behind anybody else.
+        seats.forEach(seat -> assertEquals(0, (seat.row() + seat.column()) % 2, seat.toString()));
     }
 
     @Test
@@ -147,7 +200,7 @@ class SchedulingTest {
     @Test
     void reportsAPaperNobodyIsRegisteredFor() {
         ExamData data = new ExamData(TestData.students("S", 5, "CS301"), TestData.rooms(1, 10),
-                TestData.faculty(1), List.of(TestData.exam("E9", "ME999", LocalTime.of(9, 0))));
+                TestData.faculty(2), List.of(TestData.exam("E9", "ME999", LocalTime.of(9, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.QUIZ);
 
@@ -159,7 +212,7 @@ class SchedulingTest {
     @Test
     void reportsASittingThatWouldRunPastClosingTime() {
         ExamData data = new ExamData(TestData.students("S", 5, "CS301"), TestData.rooms(1, 10),
-                TestData.faculty(1), List.of(TestData.exam("E1", "CS301", LocalTime.of(17, 0))));
+                TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(17, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.ENDSEM);
 
@@ -173,12 +226,13 @@ class SchedulingTest {
         ExamData data = new ExamData(
                 join(TestData.students("S", 10, "CS301"), TestData.students("T", 10, "EC301")),
                 TestData.rooms(2, 10),
-                TestData.faculty(1),
+                TestData.faculty(3),
                 List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0)),
                         TestData.exam("E2", "EC301", LocalTime.of(9, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.MIDSEM);
 
+        // Two rooms at once need four invigilators; three exist.
         assertFalse(result.isUsable());
         assertTrue(result.problems().stream().anyMatch(problem -> problem.contains("invigilators")),
                 String.valueOf(result.problems()));
@@ -187,7 +241,7 @@ class SchedulingTest {
     @Test
     void everyStudentIsSeatedExactlyOncePerPaper() {
         ExamData data = new ExamData(TestData.students("S", 30, "CS301"), TestData.rooms(2, 20),
-                TestData.faculty(2), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
+                TestData.faculty(4), List.of(TestData.exam("E1", "CS301", LocalTime.of(9, 0))));
 
         PlanningResult result = planner.plan(data, ExamMode.MIDSEM);
 

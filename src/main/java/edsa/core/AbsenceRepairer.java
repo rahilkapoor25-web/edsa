@@ -63,10 +63,14 @@ public final class AbsenceRepairer {
                 continue;
             }
 
-            Faculty replacement = freeReplacement(plan, slot, absentFacultyId, covers, unavailable);
+            boolean needsProfessor = leavesNoProfessor(plan, duty, absentFacultyId);
+            Faculty replacement = freeReplacement(plan, slot, absentFacultyId, needsProfessor, covers, unavailable);
             if (replacement == null) {
+                String department = plan.data().departmentOf(slot.getId());
                 uncovered.add("Nobody is free to take " + duty.roomId() + " for " + slot.getPaperCode()
-                        + " on " + slot.getDate() + " at " + slot.getStartTime() + "-" + slot.getEndTime());
+                        + " on " + slot.getDate() + " at " + slot.getStartTime() + "-" + slot.getEndTime()
+                        + (needsProfessor ? " (it needs a Professor" + (department == null ? "" : " from outside "
+                        + department) + ")" : ""));
                 continue;
             }
             repaired.assign(new Assignment(duty.slotId(), duty.roomId(), replacement.getId()));
@@ -84,17 +88,32 @@ public final class AbsenceRepairer {
         return repair(plan, absentFacultyId, window, List.of());
     }
 
-    /** The least-loaded colleague with no clashing duty and no absence of their own. */
-    private Faculty freeReplacement(ExamPlan plan, ExamSlot slot, String absentFacultyId,
+    /** True when the absent invigilator was the room's only Professor, so only a Professor may replace them. */
+    private static boolean leavesNoProfessor(ExamPlan plan, Assignment duty, String absentFacultyId) {
+        return plan.duties().forSlot(duty.slotId()).stream()
+                .filter(other -> other.roomId().equals(duty.roomId()) && !other.facultyId().equals(absentFacultyId))
+                .map(other -> plan.data().facultyMember(other.facultyId()))
+                .noneMatch(member -> member != null && member.isSenior());
+    }
+
+    /**
+     * The least-loaded colleague with no clashing duty, no absence of their own, and not from
+     * the paper's department — a Professor when the room would otherwise have none, and
+     * otherwise a junior where one is free, keeping Professors for the rooms that need them.
+     */
+    private Faculty freeReplacement(ExamPlan plan, ExamSlot slot, String absentFacultyId, boolean needsProfessor,
                                     Map<String, List<ExamSlot>> covers, List<Absence> unavailable) {
+        String department = plan.data().departmentOf(slot.getId());
         return plan.data().faculty().stream()
                 .filter(candidate -> !candidate.getId().equals(absentFacultyId))
+                .filter(candidate -> !needsProfessor || candidate.isSenior())
+                .filter(candidate -> !candidate.belongsTo(department))
                 .filter(candidate -> unavailable.stream()
                         .noneMatch(away -> away.rulesOut(candidate.getId(), slot)))
                 .filter(candidate -> covers.getOrDefault(candidate.getId(), List.of()).stream()
                         .noneMatch(slot::overlaps))
-                .min(Comparator.comparingInt((Faculty candidate) ->
-                                covers.getOrDefault(candidate.getId(), List.of()).size())
+                .min(Comparator.comparingInt((Faculty candidate) -> !needsProfessor && candidate.isSenior() ? 1 : 0)
+                        .thenComparingInt(candidate -> covers.getOrDefault(candidate.getId(), List.of()).size())
                         .thenComparing(Faculty::getId))
                 .orElse(null);
     }

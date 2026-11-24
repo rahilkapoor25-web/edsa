@@ -19,15 +19,28 @@ public final class Exam {
     private final LocalDate date;
     private final LocalTime permittedStart;
     private final Integer durationOverrideMinutes;
+    private final String department;
 
     public Exam(String id, String subjectCode, String subjectName, LocalDate date,
                 LocalTime permittedStart, Integer durationOverrideMinutes) {
+        this(id, subjectCode, subjectName, date, permittedStart, durationOverrideMinutes, null);
+    }
+
+    /** The same, with the department the paper belongs to — whose staff may not invigilate it. */
+    public Exam(String id, String subjectCode, String subjectName, LocalDate date,
+                LocalTime permittedStart, Integer durationOverrideMinutes, String department) {
         this.id = id;
         this.subjectCode = subjectCode;
         this.subjectName = subjectName;
         this.date = date;
         this.permittedStart = permittedStart;
         this.durationOverrideMinutes = durationOverrideMinutes;
+        this.department = department;
+    }
+
+    /** The paper's department, or null when the data does not say (the legacy CSV does not). */
+    public String getDepartment() {
+        return department;
     }
 
     public String getId() {

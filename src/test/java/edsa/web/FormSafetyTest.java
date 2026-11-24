@@ -45,15 +45,15 @@ class FormSafetyTest {
         mvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(
-                        "Importing replaces every stored student")))
-                .andExpect(content().string(containsString("data-busy=\"Importing...\"")));
+                        "Generating replaces the data loaded now")))
+                .andExpect(content().string(containsString("data-busy=\"Generating...\"")));
     }
 
     @Test
     @WithMockUser(username = "boss@thapar.edu", roles = "ADMIN")
     void recomputingWarnsThatItDiscardsAbsenceCover() throws Exception {
         mvc.perform(get("/"))
-                .andExpect(content().string(containsString("discards any absence cover")));
+                .andExpect(content().string(containsString("drops any absence cover")));
     }
 
     @Test
@@ -61,7 +61,7 @@ class FormSafetyTest {
     void loadingTheSampleDataAsksFirst() throws Exception {
         mvc.perform(get("/"))
                 .andExpect(content().string(containsString(
-                        "replaces the session currently loaded with the sample data")));
+                        "Replace the loaded session with the sample data")));
     }
 
     @Test

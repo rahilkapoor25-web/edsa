@@ -24,7 +24,7 @@ class AbsenceRepairerTest {
         return Stream.concat(first.stream(), second.stream()).toList();
     }
 
-    /** Two papers at once in two rooms, with a spare invigilator sitting idle. */
+    /** Two papers at once in two rooms; six staff leave a spare Professor and a spare junior idle. */
     private ExamPlan twoParallelPapers(int facultyCount) {
         ExamData data = new ExamData(
                 join(TestData.students("S", 10, "CS301"), TestData.students("T", 10, "EC301")),
@@ -35,8 +35,15 @@ class AbsenceRepairerTest {
         return planner.plan(data, ExamMode.MIDSEM).plan();
     }
 
+    /** The Professor in that sitting's room: the allocator staffs each room with its senior first. */
     private static String invigilatorOf(ExamPlan plan, String slotId) {
         return plan.duties().forSlot(slotId).get(0).facultyId();
+    }
+
+    /** The junior partner in that sitting's room. */
+    private static String juniorOf(ExamPlan plan, String slotId) {
+        return plan.duties().forSlot(slotId).stream().map(Assignment::facultyId)
+                .filter(id -> !plan.data().facultyMember(id).isSenior()).findFirst().orElseThrow();
     }
 
     /** The sittings somebody holds, sorted, so an assertion never assumes an allocation order. */
@@ -50,7 +57,7 @@ class AbsenceRepairerTest {
 
     @Test
     void theAbsentInvigilatorIsReplacedBySomebodyFree() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         String away = invigilatorOf(plan, "E1");
 
         RepairResult repair = repairer.repair(plan, away, WHOLE_SESSION);
@@ -64,7 +71,7 @@ class AbsenceRepairerTest {
 
     @Test
     void theRepairedPlanStillSatisfiesEveryRule() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
 
         RepairResult repair = repairer.repair(plan, invigilatorOf(plan, "E1"), WHOLE_SESSION);
 
@@ -73,7 +80,7 @@ class AbsenceRepairerTest {
 
     @Test
     void everyRoomStillHasAnInvigilator() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         int dutiesBefore = plan.duties().all().size();
 
         RepairResult repair = repairer.repair(plan, invigilatorOf(plan, "E1"), WHOLE_SESSION);
@@ -83,7 +90,7 @@ class AbsenceRepairerTest {
 
     @Test
     void nobodyElseIsDisturbed() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         String away = invigilatorOf(plan, "E1");
         String untouched = invigilatorOf(plan, "E2");
 
@@ -96,7 +103,7 @@ class AbsenceRepairerTest {
 
     @Test
     void seatingIsNeverTouched() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
 
         RepairResult repair = repairer.repair(plan, invigilatorOf(plan, "E1"), WHOLE_SESSION);
 
@@ -106,7 +113,7 @@ class AbsenceRepairerTest {
 
     @Test
     void anUncoverableRoomIsReportedRatherThanHidden() {
-        ExamPlan plan = twoParallelPapers(2);
+        ExamPlan plan = twoParallelPapers(4);
 
         RepairResult repair = repairer.repair(plan, invigilatorOf(plan, "E1"), WHOLE_SESSION);
 
@@ -119,12 +126,13 @@ class AbsenceRepairerTest {
         ExamData data = new ExamData(
                 TestData.students("S", 8, "CS301", "CS302"),
                 TestData.rooms(1, 10),
-                TestData.faculty(2),
+                TestData.faculty(3),
                 List.of(new Exam("E1", "CS301", "Day one paper", TestData.DAY, LocalTime.of(9, 0), null),
                         new Exam("E2", "CS302", "Day two paper", TestData.DAY.plusDays(1),
                                 LocalTime.of(9, 0), null)));
         ExamPlan plan = planner.plan(data, ExamMode.MIDSEM).plan();
-        String away = invigilatorOf(plan, "E1");
+        // The only junior works both days, so they have a duty the absence must leave alone.
+        String away = juniorOf(plan, "E1");
 
         RepairResult repair = repairer.repair(plan, away, AbsenceWindow.wholeDay(TestData.DAY));
 
@@ -137,7 +145,7 @@ class AbsenceRepairerTest {
 
     @Test
     void anUnknownInvigilatorIsReportedNotIgnored() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
 
         RepairResult repair = repairer.repair(plan, "NOBODY", WHOLE_SESSION);
 
@@ -147,7 +155,7 @@ class AbsenceRepairerTest {
 
     @Test
     void someoneWithNoDutiesChangesNothing() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         String idle = plan.workloads().stream()
                 .filter(workload -> workload.duties() == 0)
                 .findFirst().orElseThrow().member().getId();
@@ -160,14 +168,14 @@ class AbsenceRepairerTest {
 
     // ── Absences measured as intervals, not as whole days ────────────────────────────────
 
-    /** One professor, one room, three papers on one day: 09:00, 12:00 and 15:00. */
+    /** Two Professors and a junior, one room, three papers on one day: 09:00, 12:00 and 15:00. */
     private ExamPlan threeSittingsInOneDay() {
         ExamData data = new ExamData(
                 List.of(new Student("S1", "Student One", "CSE", Set.of("CS301")),
                         new Student("S2", "Student Two", "CSE", Set.of("CS302")),
                         new Student("S3", "Student Three", "CSE", Set.of("CS303"))),
                 TestData.rooms(1, 10),
-                TestData.faculty(2),
+                TestData.faculty(3),
                 List.of(new Exam("E1", "CS301", "Morning", TestData.DAY, LocalTime.of(9, 0), null),
                         new Exam("E2", "CS302", "Midday", TestData.DAY, LocalTime.of(12, 0), null),
                         new Exam("E3", "CS303", "Afternoon", TestData.DAY, LocalTime.of(15, 0), null)));
@@ -244,7 +252,7 @@ class AbsenceRepairerTest {
         ExamData data = new ExamData(
                 TestData.students("S", 8, "CS301", "CS302", "CS303"),
                 TestData.rooms(1, 10),
-                TestData.faculty(2),
+                TestData.faculty(3),
                 List.of(new Exam("E1", "CS301", "Day one", TestData.DAY, LocalTime.of(9, 0), null),
                         new Exam("E2", "CS302", "Day two", TestData.DAY.plusDays(1), LocalTime.of(9, 0), null),
                         new Exam("E3", "CS303", "Day four", TestData.DAY.plusDays(3), LocalTime.of(9, 0), null)));
@@ -273,23 +281,23 @@ class AbsenceRepairerTest {
 
     @Test
     void aColleagueAlreadyAwayIsNotOfferedTheRoom() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         String away = invigilatorOf(plan, "E1");
-        String alsoAway = plan.data().faculty().stream()
-                .map(Faculty::getId)
-                .filter(id -> !id.equals(away) && !id.equals(invigilatorOf(plan, "E2")))
-                .findFirst().orElseThrow();
+        // The absent invigilator is the room's Professor, so only the idle Professor could cover.
+        String alsoAway = plan.workloads().stream()
+                .filter(workload -> workload.duties() == 0 && workload.member().isSenior())
+                .findFirst().orElseThrow().member().getId();
 
         RepairResult repair = repairer.repair(plan, away, WHOLE_SESSION,
                 List.of(new Absence(alsoAway, WHOLE_SESSION)));
 
-        assertFalse(repair.isComplete(), "the only free colleague is away too, so the room is reported");
+        assertFalse(repair.isComplete(), "the only free Professor is away too, so the room is reported");
         assertTrue(repair.uncovered().get(0).contains("Nobody is free to take"), repair.uncovered().toString());
     }
 
     @Test
     void theOriginalPlanIsNeverModified() {
-        ExamPlan plan = twoParallelPapers(3);
+        ExamPlan plan = twoParallelPapers(6);
         String away = invigilatorOf(plan, "E1");
         int dutiesBefore = plan.duties().forFaculty(away).size();
 

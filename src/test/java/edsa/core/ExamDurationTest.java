@@ -39,7 +39,7 @@ class ExamDurationTest {
                         "Student " + index, "CSE", Set.of(exam.getSubjectCode())));
             }
         }
-        return new ExamData(students, TestData.rooms(4, 10), TestData.faculty(6), exams);
+        return new ExamData(students, TestData.rooms(4, 10), TestData.faculty(8), exams);
     }
 
     private List<ExamSlot> schedule(ExamData data, ExamMode mode) {

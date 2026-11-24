@@ -26,6 +26,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -63,6 +64,7 @@ public class DataAndRunController {
         model.addAttribute("modes", ExamMode.values());
         model.addAttribute("mode", workspace.mode());
         model.addAttribute("hasData", workspace.hasData());
+        model.addAttribute("source", workspace.source());
         model.addAttribute("storedData", repository.hasData());
 
         if (workspace.hasData()) {
@@ -119,9 +121,27 @@ public class DataAndRunController {
 
         flash.addFlashAttribute("report", report);
         if (report.successful()) {
-            workspace.setData(repository.load());
+            workspace.setData(repository.load(), workbook.getOriginalFilename());
         }
         return "redirect:/";
+    }
+
+    /**
+     * The validity check the page runs as soon as a workbook is chosen. Stores nothing; the
+     * page enables Generate schedule only when this says the workbook is sound.
+     */
+    @PostMapping("/data/workbook/check")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseBody
+    public ImportReport checkWorkbook(@RequestParam(required = false) MultipartFile workbook) {
+        if (workbook == null || workbook.isEmpty()) {
+            return ImportReport.failed(java.util.List.of("Choose an .xlsx workbook to upload"));
+        }
+        try {
+            return workbooks.check(workbook.getOriginalFilename(), workbook.getSize(), workbook.getInputStream());
+        } catch (IOException e) {
+            return ImportReport.failed(java.util.List.of("The upload could not be read: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/data/stored")
@@ -131,14 +151,14 @@ public class DataAndRunController {
             flash.addFlashAttribute("error", "No workbook has been imported yet");
             return "redirect:/";
         }
-        workspace.setData(repository.load());
+        workspace.setData(repository.load(), "the imported workbook");
         return "redirect:/";
     }
 
     @PostMapping("/data/sample")
     @PreAuthorize("hasRole('ADMIN')")
     public String loadSample() {
-        workspace.setData(SampleData.load());
+        workspace.setData(SampleData.load(), "the bundled sample data");
         return "redirect:/";
     }
 
@@ -154,7 +174,7 @@ public class DataAndRunController {
                     reader.readStudents(contentOf(students), nameOf(students, "students.csv")),
                     reader.readRooms(contentOf(rooms), nameOf(rooms, "rooms.csv")),
                     reader.readFaculty(contentOf(faculty), nameOf(faculty, "faculty.csv")),
-                    reader.readExams(contentOf(timetable), nameOf(timetable, "timetable.csv"))));
+                    reader.readExams(contentOf(timetable), nameOf(timetable, "timetable.csv"))), "the CSV files");
         } catch (InvalidInputException | UncheckedIOException e) {
             flash.addFlashAttribute("error", e.getMessage());
         }

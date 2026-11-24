@@ -138,7 +138,7 @@ public class SecurityConfig {
                         // sign in, so its owner has no other way to set a password. The
                         // link's random single-use secret is the credential.
                         .requestMatchers("/login", "/activate", "/css/**", "/favicon.ico", "/error").permitAll()
-                        .requestMatchers("/users/**", "/users").hasRole("ADMIN")
+                        .requestMatchers("/users/**", "/users", "/points").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(login -> login
                         .loginPage("/login")

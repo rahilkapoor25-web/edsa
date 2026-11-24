@@ -7,13 +7,16 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Seats the students and staffs the rooms for a timetable the scheduler has already placed.
  *
  * <p>A cohort is split across the rooms reserved for its sitting, filling each room's grid row
- * by row until the room is at capacity. Each used room then gets the least-loaded invigilator
- * who is free at that time, which keeps duties spread without needing a second pass.
+ * by row until the room is at capacity. When the rest of the cohort fits with a gap around
+ * everybody, they sit on a checkerboard instead. Each used room then gets two invigilators who
+ * are free at that time and not from the paper's department: the least-loaded Professor, and
+ * the least-loaded junior as their partner. That keeps duties spread without a second pass.
  *
  * <p>Conflicts are tracked as the plan is built — which papers each student sits, which
  * sittings each invigilator covers — so placing a seat costs the same whether the session has
@@ -73,11 +76,16 @@ public final class GreedyAllocator {
                 continue;
             }
             int capacity = data.capacityOf(roomId, config);
+            // Spread out whenever the rest of the cohort fits on the checkerboard; otherwise pack.
+            boolean spaced = cohort.size() - next <= data.spacedCapacityOf(roomId, config);
             int seatedHere = 0;
 
             for (int row = 1; row <= room.getRowCount() && next < cohort.size() && seatedHere < capacity; row++) {
                 for (int column = 1; column <= room.getColumnCount() && next < cohort.size() && seatedHere < capacity;
                      column++) {
+                    if (spaced && !ExamData.isSpacedSeat(row, column)) {
+                        continue;
+                    }
                     Student student = cohort.get(next);
                     List<ExamSlot> already = studentSittings.computeIfAbsent(student.getId(), key -> new ArrayList<>());
                     if (already.stream().anyMatch(slot::overlaps)) {
@@ -104,26 +112,54 @@ public final class GreedyAllocator {
         return roomsUsed;
     }
 
+    /**
+     * Two invigilators per room: a Professor first, so a junior is never left alone, then a
+     * partner — a junior when one is free, keeping the Professors for the rooms that need them.
+     * Nobody from the paper's own department is considered.
+     */
     private void staff(ExamSlot slot, Set<String> roomsUsed, ExamData data, DutyRoster duties,
                        WorkloadLedger ledger, Map<String, List<ExamSlot>> facultyDuties, List<String> problems) {
+        String department = data.departmentOf(slot.getId());
+        String outside = department == null ? "" : " outside " + department;
+        String when = slot.getPaperCode() + " (" + slot.getStartTime() + "-" + slot.getEndTime()
+                + " on " + slot.getDate() + ")";
         for (String roomId : roomsUsed) {
-            Faculty chosen = null;
-            for (Faculty candidate : leastLoadedFirst(data.faculty(), ledger)) {
-                List<ExamSlot> covered = facultyDuties.computeIfAbsent(candidate.getId(), key -> new ArrayList<>());
-                if (covered.stream().anyMatch(slot::overlaps)) {
-                    continue;
-                }
-                duties.assign(new Assignment(slot.getId(), roomId, candidate.getId()));
-                covered.add(slot);
-                ledger.record(candidate.getId());
-                chosen = candidate;
-                break;
+            Faculty senior = firstFree(data, ledger, facultyDuties, slot, department, Faculty::isSenior);
+            if (senior == null) {
+                problems.add("No Professor" + outside + " is free for room " + roomId + " during " + when);
+                continue;
             }
-            if (chosen == null) {
-                problems.add("No invigilator is free for room " + roomId + " during " + slot.getPaperCode()
-                        + " (" + slot.getStartTime() + "-" + slot.getEndTime() + " on " + slot.getDate() + ")");
+            assign(slot, roomId, senior, duties, ledger, facultyDuties);
+            Faculty partner = firstFree(data, ledger, facultyDuties, slot, department, member -> !member.isSenior());
+            if (partner == null) {
+                partner = firstFree(data, ledger, facultyDuties, slot, department, member -> true);
+            }
+            if (partner == null) {
+                problems.add("No second invigilator" + outside + " is free for room " + roomId + " during " + when);
+                continue;
+            }
+            assign(slot, roomId, partner, duties, ledger, facultyDuties);
+        }
+    }
+
+    private static Faculty firstFree(ExamData data, WorkloadLedger ledger, Map<String, List<ExamSlot>> facultyDuties,
+                                     ExamSlot slot, String department, Predicate<Faculty> wanted) {
+        for (Faculty candidate : leastLoadedFirst(data.faculty(), ledger)) {
+            if (!wanted.test(candidate) || candidate.belongsTo(department)) {
+                continue;
+            }
+            if (facultyDuties.getOrDefault(candidate.getId(), List.of()).stream().noneMatch(slot::overlaps)) {
+                return candidate;
             }
         }
+        return null;
+    }
+
+    private static void assign(ExamSlot slot, String roomId, Faculty member, DutyRoster duties,
+                               WorkloadLedger ledger, Map<String, List<ExamSlot>> facultyDuties) {
+        duties.assign(new Assignment(slot.getId(), roomId, member.getId()));
+        facultyDuties.computeIfAbsent(member.getId(), key -> new ArrayList<>()).add(slot);
+        ledger.record(member.getId());
     }
 
     /** Spreads duties as the plan is built, and breaks ties by id so runs are repeatable. */
