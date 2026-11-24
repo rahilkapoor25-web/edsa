@@ -2,31 +2,31 @@
 
 ## What the system does
 
-EDSA is a Java web application that turns four spreadsheets — students, rooms, faculty,
-timetable — into a complete exam seating plan and invigilation duty roster that satisfies
-every rule the examination office follows. The coordinator uploads the CSVs, clicks once,
-and gets a plan back.
+EDSA is a Java web application that turns one Excel workbook — students, faculty, rooms,
+subjects, enrollments, exams — into a complete exam seating plan and invigilation duty roster
+that satisfies every rule the examination office follows. The coordinator chooses the file,
+it is checked on the spot, and **Generate schedule** produces the plan.
 
-Five pages: **Import** (upload the four CSVs, show row counts and malformed-row warnings),
-**Solve** (start the run, show progress and the violation count falling to zero),
-**Plan viewer** (seating and duty tables, filter by room or date), **Disruption** (mark a
-faculty member absent, show a diff of what the repairer changed), **Reports** (preview and
-download seating charts, attendance sheets, workload summary).
+Six pages: **Data and Run** (import, mode, every rule pass/fail), **Room schedule** (sittings
+and seat-by-seat grids), **Workloads** (duties per invigilator), **Disruption** (record,
+confirm or reject an absence and see what moved), **Points** (duty points, administrators
+only) and **Accounts** (administrators only).
 
-Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
+The original brief is `docs/EDSA_Tech_Brief.pdf`; where this file and the brief differ, this
+file describes what is built.
 
 ## Stack
 
 | Technology | Used for |
 | --- | --- |
 | Java 17 (LTS) | The whole application |
-| Spring Boot + Thymeleaf | HTTP layer and the five pages, server-rendered HTML + minimal CSS |
+| Spring Boot + Thymeleaf | HTTP layer and the pages, server-rendered HTML + minimal CSS |
 | JDBC | All database access, written as plain Java |
 | Spring Security | Form login against the account table, CSRF, sessions |
 | H2 (now), MySQL (later) | Accounts, imported students, rooms, faculty, subjects, enrollments, exams |
 | Apache POI | Reading the one uploaded workbook and writing the template |
 | CSV + `BufferedReader` | The legacy four-file upload, still supported |
-| Threads + `synchronized` | Running the solver off the request thread, background rule checking |
+| `synchronized` | Keeping the shared `Workspace` session and login throttling safe under concurrent requests |
 | Maven | Build, dependencies, test execution |
 | JUnit 5 | Unit and integration tests |
 | JaCoCo | Statement and branch coverage reports |
@@ -36,8 +36,8 @@ Source of truth for the design: `docs/EDSA_Tech_Brief.pdf`.
 access is written directly in JDBC, including the account and import tables. The schema lives
 in `src/main/resources/db/schema.sql` and is applied on start-up.
 
-The database is H2 in-memory today (`src/main/resources/application.properties`) and moves
-to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
+The database is H2 in a file under `./data` today (`src/main/resources/application.properties`)
+and can move to MySQL later. Because everything goes through JDBC, that swap is a driver dependency plus
 the datasource properties — no code change.
 
 ## Package architecture — the one-way rule
@@ -87,39 +87,40 @@ a plan is scored belongs in `edsa.core` — even a single `if` about capacity or
 - *The things:* `Student`, `Faculty`, `Room`, `ExamSlot`, `Seat`, `SeatingPlan`, `DutyRoster`,
   `Assignment`, `WorkloadLedger`, and `Person` as a shared parent of `Student` and `Faculty`.
   Plus, for absences: `AbsenceWindow` (an interval somebody is away), `Absence`, `LeaveRequest`
-  and `LeaveStatus`.
+  and `LeaveStatus`; for seniority, `Post` (Professor senior; Associate and Assistant Professor
+  junior); for points, `DutyPoint`.
 - *The rules:* a `Constraint` interface, split into hard and soft, with one class per rule and
   a `PlanChecker` that runs them all and lists what is broken.
 - *The decisions:* `TimetableScheduler` places the papers, `GreedyAllocator` seats and staffs
   them, `AbsenceRepairer` covers an invigilator who cannot attend, and `ExamPlanner` runs the
-  three steps plus the independent check. Still to come: `LocalSearchImprover` for fairness
-  and `ValidatorThread` for background re-checking.
-- *The errors:* four custom exceptions — capacity, broken rules, no substitute available, bad
-  input files.
+  three steps plus the independent check. Not built: a local-search improver for fairness and
+  background re-checking — planning is fast enough to run on the request.
+- *The errors:* `InvalidInputException` for bad input; every other failure is reported as a
+  problem or a failed rule rather than thrown.
 
 **`edsa.data` — the files**
 
-Reads the four CSVs and checks every row, writes the reports out, loads them into the
-database, saves and reloads finished plans, keeps a log of what the coordinator did. A bad row
-is reported with the file name and line number rather than skipped quietly. Also stores the
-recorded absences (`LeaveRequestRepository`) and reads the imported faculty back out with
-their contact details (`ExamDataRepository.facultyContacts()`, `FacultyContact`) for the
-Accounts page to provision from.
+Reads the workbook (`ExcelWorkbookReader`) or the four legacy CSVs (`CsvReader`) and checks
+every row, writes the exports, and loads imported records into the database. A bad row is
+reported with its worksheet (or file), row and column rather than skipped quietly. Also stores
+the recorded absences (`LeaveRequestRepository`) and the duty points (`DutyPointRepository`),
+and reads the imported faculty back out with their contact details
+(`ExamDataRepository.facultyContacts()`, `FacultyContact`) for the Accounts page to provision
+from.
 
-**`edsa.web` — the five pages**
+**`edsa.web` — the pages**
 
-Controllers and Thymeleaf templates for Import, Solve, Plan viewer, Disruption and Reports.
-The Solve page starts the job on a background thread and polls for progress, so the browser
-never sits waiting for the solver.
-
-Built so far: **Data and Run** (`/`) imports the workbook, picks the mode and lists every rule
-with pass/fail and a breach count; **Room schedule** (`/rooms`) shows the sittings as one
-table, with seat-by-seat grids once a room is chosen; **Workloads** (`/workloads`) shows duties
-per invigilator; **Disruption** (`/disruption`) records an absence, has it confirmed or rejected, and shows the diff;
-**Accounts** (`/users`, administrators only) creates and disables accounts. Downloads:
-`/exam-plan.xlsx` (Timetable, Seating and Duties sheets), `/seating-plan.csv`, and
-`/import-template.xlsx`. `Workspace` holds the loaded data, the chosen mode, the computed plan
-and the last repair; importing data or changing the mode plans it straight away.
+**Data and Run** (`/`) checks a chosen workbook straight away (`POST /data/workbook/check`),
+enables **Generate schedule** only when it passes, picks the mode once data is loaded and lists
+every rule with pass/fail and a breach count; **Room schedule** (`/rooms`) shows the sittings as
+one table, with seat-by-seat grids once a room is chosen; **Workloads** (`/workloads`) shows
+duties per invigilator with their post; **Disruption** (`/disruption`) records an absence, has it
+confirmed or rejected, and shows the diff; **Points** (`/points`, administrators only) lists
+every teacher's duties, covers, misses and points with the history; **Accounts** (`/users`,
+administrators only) creates and disables accounts. Downloads: `/exam-plan.xlsx` (Timetable,
+Seating Matrix, Seating and Duties sheets), `/seating-plan.csv`, and `/import-template.xlsx`.
+`Workspace` holds the loaded data and where it came from, the chosen mode, the computed plan and
+the last repair; importing data or changing the mode plans it straight away.
 
 Controllers ask the core and hand the answer to the template — no filtering, counting or
 grouping in a controller. When a page needs the plan shaped a particular way, that shape is a
@@ -215,15 +216,23 @@ timetable is never shown: the next compute re-times every sitting.
 1. `TimetableScheduler` turns each declared `Exam` into an `ExamSlot` with real times. Papers
    are placed largest cohort first, at the earliest time that works, so sittings pack rather
    than leave gaps, and several run in parallel when students, rooms and invigilators allow.
-   It reserves the rooms it checked, so the allocator cannot drift from what was verified.
-2. `GreedyAllocator` seats each cohort across those rooms and gives every used room the
-   least-loaded free invigilator. Conflicts are tracked incrementally, so cost does not grow
-   with the number of rooms.
+   It reserves the rooms it checked, so the allocator cannot drift from what was verified:
+   the smallest free room that seats the cohort spaced out, else the smallest that seats it at
+   all, else the cohort is split across the largest rooms. A paper is only placed at a time
+   when enough staff are free to give every room two invigilators, one a Professor, none from
+   the paper's department (`staffingShortfall`; it counts heads, and the checker in step 3
+   catches the rare case where the counts fit but no assignment does).
+2. `GreedyAllocator` seats each cohort across those rooms — in a checkerboard (every other
+   seat) when the rest of the cohort fits that way, row by row otherwise — and gives every
+   used room two invigilators: the least-loaded free Professor from outside the paper's
+   department, then a junior partner (a second Professor only when no junior is free).
+   Conflicts are tracked incrementally, so cost does not grow with the number of rooms.
 3. `PlanChecker` then re-checks the finished plan independently.
 
 **Intervals are start-inclusive and end-exclusive.** A Midsem starting at 09:00 ends at 11:00;
-nothing else may use that student, room or invigilator at 10:00, but a sitting may start at
-11:00.
+nothing else may use that student or invigilator at 10:00, but either may start again at
+11:00. A room additionally needs its turnaround (`edsa.scheduling.turnaround-minutes`, 30 by
+default), so its next sitting starts at 11:30 at the earliest.
 
 Anything that cannot be placed is reported with its reason (`PlanningResult.problems()`) and
 the plan is not presented as a timetable — `isUsable()` is what the pages ask.
@@ -238,7 +247,18 @@ anything is written and `WorkbookImportService` writes in one transaction, so a 
 workbook leaves the database exactly as it was. `/import-template.xlsx` downloads a filled
 example to start from.
 
-The four-CSV upload and the bundled sample data still work, unchanged.
+Required columns follow the reference sample: Faculty needs a `Post` (Professor, Associate
+Professor or Assistant Professor) and Exams a `Start Time`; one exam per subject. Optional
+columns (Email, Year, Section, room Name, Semester) are format-checked when filled in.
+`WorkbookImportService.check()` runs exactly the import's validation and stores nothing, which
+is what the page calls when a file is chosen. Beyond row checks it refuses a workbook the
+planner could not use: no exams, no available room or invigilator, no available Professor, an
+exam with no students or more students than all rooms seat, a student enrolled in nothing, or
+a paper with no Professor (or fewer than two staff) from outside its department.
+
+The four-CSV upload and the bundled sample data still work. Their faculty carry a `senior`
+flag instead of a post, and their papers have no department, so the department rule cannot
+apply to them.
 
 ## Covering an absence
 
@@ -260,7 +280,9 @@ away 09:00–12:00 loses the paper running 09:00–11:00 and keeps the one start
 covers a few hours, a whole day, several days or the whole session.
 
 Once confirmed, `AbsenceRepairer` offers each affected room to the least-loaded colleague who
-is free at that time and not themselves away on confirmed leave. One absence therefore moves
+is free at that time, not themselves away on confirmed leave, and not from the paper's
+department. If the absent teacher was the room's only Professor, only a Professor may replace
+them; otherwise a junior is preferred, so Professors stay free for rooms that need one. One absence therefore moves
 one person per room and disturbs nobody else, and seating is never touched. No cascade is
 attempted: when nobody is free for a room, that room is reported as uncovered rather than fixed
 by shuffling three other people, because the coordinator needs to know. The repair is
@@ -270,28 +292,27 @@ and there is no state in which some duties moved and others silently did not. Th
 roster replaces the current one and is re-checked, so the other pages and the downloads show
 the plan as it now stands.
 
+**Duty points.** Confirming an absence also records points, in the same transaction:
+`DutyPoint.earnedBy` gives the absent teacher −1 for each duty the absence made them miss
+(even one nobody could cover) and the colleague who takes each duty +1. It uses the same window
+rule as `AbsenceRepairer`, so points always match the duties that moved. The `duty_point` table
+is append-only and survives restarts and re-imports; the Points page sums it per teacher. Points
+are keyed by faculty id, so two people who share an id across workbooks share a total.
+
 ## Rules and scoring
 
-**Hard constraints** decide whether a plan is allowed at all. Five are implemented, one per
+**Hard constraints** decide whether a plan is allowed at all. Eight are implemented, one per
 failure the coordinator must act on, each reporting what broke and where:
-`ExamDurationConstraint`, `RoomCapacityConstraint`, `RoomOverlapConstraint`,
-`StudentConflictConstraint`, `FacultyConflictConstraint`. Still to come from the brief: no
-invigilator on their own subject's paper, and no two students of the same paper seated
-adjacent.
+`ExamDurationConstraint`, `RoomCapacityConstraint`, `RoomOverlapConstraint` (including the
+turnaround), `StudentConflictConstraint`, `FacultyConflictConstraint`,
+`InvigilatorsPerRoomConstraint` (exactly two per room), `SeniorInEveryRoomConstraint` (at least
+one Professor) and `DepartmentConflictConstraint` (nobody from the paper's department). The
+brief's "no two students of the same paper seated adjacent" is approached by the checkerboard
+seating, not enforced as a rule.
 
-**Soft constraints** are preferences that add penalty points. Adding up those points gives the
-plan a score, and **a lower score is a better plan**. That one number is the system's whole
-idea of "better".
-
-| Soft constraint | Penalty |
-| --- | --- |
-| Workload fairness | (duties − fair share)², per invigilator |
-| Consecutive slots | 5 per back-to-back pair |
-| Seniority cover | 10 per room with no senior |
-| Department spread | 3 per single-department room |
-
-These weights encode the examination office's priorities. They live in one configuration class
-so the ordering changes without touching the solver.
+**Soft constraints** (the `SoftConstraint` interface) are meant as preferences that add penalty
+points to a score, lower being better. None is implemented yet: workload fairness is handled
+by always picking the least-loaded invigilator, and seniority and department are hard rules.
 
 **Determinism:** the same input always gives the same output. Nothing is learned or remembered
 between runs.

@@ -41,12 +41,31 @@ the Accounts page.
 
 ### Getting data in
 
-- **Quickest:** *Data and Run* → **Load the bundled sample data** (60 students, 4 rooms,
-  8 faculty, 6 papers).
-- **Properly:** *Data and Run* → **Download Excel template**, replace the example rows, then
-  **Import workbook**. Six worksheets: Students, Faculty, Rooms, Subjects, Enrollments, Exams.
-  Fill in the Faculty worksheet's `Email` column — that is what the Accounts page creates
-  sign-in accounts from.
+- **Quickest:** *Data and Run* → **Load sample data** (60 students, 4 rooms, 8 faculty,
+  6 papers).
+- **Ready-made workbooks:** `docs/EDSA_Sample_Data_Seniority.xlsx` (180 students, 20 staff,
+  10 rooms, 6 papers); `docs/EDSA_Sample_Data_Engineering.xlsx` (144 students, 24 staff,
+  7 rooms, 9 papers, with a "Try this" sheet of seven absences and the Points they produce);
+  and `docs/EDSA_Disruption_Test_Data.xlsx`, whose "Disruption tests" sheet lists nine steps
+  (record, reject, confirm absences) with the expected result of each.
+- **Your own:** *Data and Run* → **Download template**, replace the example rows, then choose
+  the file. It is checked the moment it is chosen; **Generate schedule** is enabled only when
+  the check passes, and otherwise every problem is listed with its worksheet, row and column.
+
+The workbook has six worksheets. Required columns:
+
+| Worksheet | Required columns |
+| --- | --- |
+| Students | Student ID, Name, Department |
+| Faculty | Faculty ID, Name, Department, **Post** (Professor, Associate Professor or Assistant Professor) |
+| Rooms | Room ID, Building, Capacity |
+| Subjects | Subject Code, Subject Name, Department |
+| Enrollments | Student ID, Subject Code |
+| Exams | Exam ID, Subject Code, Date, **Start Time** |
+
+Optional columns (Email, Year, Section, room Name, Semester) are format-checked when filled in.
+Fill in the Faculty `Email` column — that is what the Accounts page creates sign-in accounts
+from. The four-CSV upload still works, behind **Upload CSV files**.
 
 ## The pages
 
@@ -56,10 +75,32 @@ the Accounts page.
 | **Room schedule** (`/rooms`) | The sittings, the seat-by-seat grid, and a search for an invigilator by name |
 | **Workloads** (`/workloads`) | Duties per invigilator |
 | **Disruption** (`/disruption`) | Record an absence, confirm or reject it, see what moved |
+| **Points** (`/points`) | Every teacher's duties, covers, misses and points, with the history. Administrators only |
 | **Accounts** (`/users`) | Create accounts one at a time or in bulk from the imported faculty. Administrators only |
 
 Downloads: `/exam-plan.xlsx` (Timetable, Seating Matrix, Seating and Duties sheets),
-`/seating-plan.csv`, `/import-template.xlsx`.
+`/seating-plan.csv`, `/import-template.xlsx`. The sun/moon button in the header switches dark
+mode; the choice is remembered per browser.
+
+## The rules every plan must pass
+
+Eight hard rules, each re-checked on the finished plan and listed on Data and Run as pass or
+fail with what broke and where:
+
+| Rule | Meaning |
+| --- | --- |
+| Exam duration | Every sitting lasts the length its mode gives it |
+| Room capacity | No room seats more students than it holds |
+| Room overlap | No two sittings share a room, including a 30-minute turnaround between them |
+| Student conflict | No student sits two papers at once |
+| Faculty conflict | No invigilator is in two rooms at once |
+| Invigilators per room | Every room in use has exactly two invigilators |
+| Senior in every room | At least one of them is a Professor (Associate and Assistant Professors are junior) |
+| Department conflict | Nobody invigilates a paper of their own department |
+
+The scheduler also picks the smallest free room that fits a cohort, and seats students in a
+checkerboard (every other seat) whenever the room is big enough, packing row by row only when
+it is not.
 
 ## Who can do what
 
@@ -75,7 +116,14 @@ Recording an absence changes nothing on its own. It is stored as pending and wai
 administrator to confirm or reject it, and **only a confirmation moves a duty**. A review
 deadline passing does not approve anything — it marks the request overdue, because silence is
 not approval. Once confirmed, each affected room is offered to the least-loaded colleague who
-is free at that time; a room nobody can take is reported rather than quietly left empty.
+is free at that time and not from the paper's department; if the absent teacher was the room's
+only Professor, only another Professor may take it. A room nobody can take is reported rather
+than quietly left empty.
+
+**Points.** A confirmed absence costs the absent teacher **−1 for each duty it made them miss**
+(even one nobody could cover), and the colleague who takes each duty earns **+1**. Pending and
+rejected absences earn nothing. Points are kept in the database and survive restarts and
+re-imports.
 
 Absences are measured as intervals, so leave from 09:00 to 12:00 takes the paper running
 09:00–11:00 and leaves one starting at 12:00 alone.
@@ -124,4 +172,4 @@ Three packages, and the arrows point one way: `edsa.web` → `edsa.data` → `ed
 upward and no Spring, which is why the planner can be tested without opening a browser.
 Controllers decide nothing — they bind a request, ask the core, and pick a view.
 
-See `CLAUDE.md` for the full design, the rules and how to add a constraint.
+See [`edsaa.md`](edsaa.md) for the full design, the rules and how to add a constraint.
