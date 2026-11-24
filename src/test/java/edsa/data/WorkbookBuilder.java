@@ -24,10 +24,12 @@ final class WorkbookBuilder {
                         List.of(List.of("S001", "Example One", "s1@example.edu", "CSE", "3", "A"),
                                 List.of("S002", "Example Two", "s2@example.edu", "CSE", "3", "A"),
                                 List.of("S003", "Example Three", "s3@example.edu", "ECE", "3", "B")))
-                .sheet("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Available"),
-                        List.of(List.of("F01", "Faculty One", "f1@example.edu", "CSE", "yes"),
-                                List.of("F02", "Faculty Two", "f2@example.edu", "ECE", "yes"),
-                                List.of("F03", "Faculty Three", "f3@example.edu", "ME", "no")))
+                .sheet("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Post", "Available"),
+                        List.of(List.of("F01", "Faculty One", "f1@example.edu", "CSE", "Professor", "yes"),
+                                List.of("F02", "Faculty Two", "f2@example.edu", "ECE", "Professor", "yes"),
+                                List.of("F03", "Faculty Three", "f3@example.edu", "ME", "Assistant Professor", "no"),
+                                List.of("F04", "Faculty Four", "f4@example.edu", "ME", "Associate Professor", "yes"),
+                                List.of("F05", "Faculty Five", "f5@example.edu", "ME", "Assistant Professor", "yes")))
                 .sheet("Rooms", List.of("Room ID", "Name", "Building", "Capacity", "Available"),
                         List.of(List.of("R101", "Hall One", "Block A", "30", "yes"),
                                 List.of("R102", "Hall Two", "Block A", "20", "yes")))

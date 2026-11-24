@@ -24,7 +24,7 @@ class SeatingPlanCsvTest {
         assertEquals("slot_id,paper_code,exam_date,start_time,room_id,room_name,row,seat,student_id,student_name",
                 lines.get(0));
         assertEquals(plan.seating().seatedCount() + 1, lines.size());
-        assertTrue(lines.get(1).startsWith("E1,CS301,2026-11-10,09:30,R201,Seminar Hall,"), lines.get(1));
+        assertTrue(lines.get(1).startsWith("E1,CS301,2026-11-10,09:30,R101,Lecture Hall 1,"), lines.get(1));
         assertTrue(lines.stream().skip(1).allMatch(line -> line.split(",").length == 10));
     }
 }

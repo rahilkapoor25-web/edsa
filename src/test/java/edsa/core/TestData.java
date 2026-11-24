@@ -24,12 +24,25 @@ final class TestData {
         return students;
     }
 
+    /**
+     * Odd-numbered members are Professors (senior), even-numbered Assistant Professors, all in a
+     * department no test paper belongs to — so every room can be given its senior-and-partner pair.
+     */
     static List<Faculty> faculty(int count) {
         List<Faculty> faculty = new ArrayList<>();
         for (int index = 1; index <= count; index++) {
-            faculty.add(new Faculty("F" + index, "Faculty " + index, "CSE", false, Set.of()));
+            faculty.add(member("F" + index, "STAFF", index % 2 == 1 ? Post.PROFESSOR : Post.ASSISTANT_PROFESSOR));
         }
         return faculty;
+    }
+
+    static Faculty member(String id, String department, Post post) {
+        return new Faculty(id, "Faculty " + id.substring(1), department, post);
+    }
+
+    /** A paper that belongs to a department, so that department's staff may not invigilate it. */
+    static Exam paper(String id, String subjectCode, LocalTime permittedStart, String department) {
+        return new Exam(id, subjectCode, subjectCode + " paper", DAY, permittedStart, null, department);
     }
 
     static List<Room> rooms(int count, int capacity) {

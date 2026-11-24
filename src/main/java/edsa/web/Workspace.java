@@ -25,6 +25,7 @@ public class Workspace {
     private final ExamPlanner planner;
 
     private ExamData data;
+    private String source;
     private ExamMode mode = ExamMode.ENDSEM;
     private PlanningResult result;
     private RepairResult lastRepair;
@@ -35,9 +36,20 @@ public class Workspace {
 
     /** Loading data plans it straight away, so exams arrive already scheduled and staffed. */
     public synchronized void setData(ExamData data) {
+        setData(data, null);
+    }
+
+    /** The same, remembering where the data came from — a workbook's file name, say — for the page. */
+    public synchronized void setData(ExamData data, String source) {
         this.data = data;
+        this.source = data == null ? null : source;
         this.result = data == null ? null : planner.plan(data, mode);
         this.lastRepair = null;
+    }
+
+    /** Where the loaded data came from, or null when that was not recorded. */
+    public synchronized String source() {
+        return source;
     }
 
     /** Changing the mode re-times the whole session rather than leaving a stale plan. */

@@ -102,7 +102,8 @@ class SittingLookupTest {
         ExamData data = new ExamData(
                 List.of(new Student("S1", "Student One", "CSE", Set.of("CS301"))),
                 List.of(Room.ofCapacity("R20", "Small Hall", 20, "Block A")),
-                List.of(new Faculty("F1", "Faculty One", "CSE", false, Set.of())),
+                List.of(new Faculty("F1", "Faculty One", "CSE", Post.PROFESSOR),
+                        new Faculty("F2", "Faculty Two", "CSE", Post.ASSISTANT_PROFESSOR)),
                 List.of(new Exam("E1", "CS301", "Data Structures", TestData.DAY,
                         LocalTime.of(9, 0), null)));
         SeatingGrid grid = new ExamPlanner().plan(data, ExamMode.MIDSEM).plan()

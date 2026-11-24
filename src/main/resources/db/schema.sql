@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS faculty (
     available  BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
+-- Added with seniority: Professor (senior), Associate Professor or Assistant Professor (junior).
+ALTER TABLE faculty ADD COLUMN IF NOT EXISTS post VARCHAR(40);
+
 CREATE TABLE IF NOT EXISTS room (
     id        VARCHAR(40) PRIMARY KEY,
     name      VARCHAR(120) NOT NULL,
@@ -91,3 +94,18 @@ CREATE TABLE IF NOT EXISTS leave_request (
 );
 
 CREATE INDEX IF NOT EXISTS idx_leave_request_status ON leave_request (status);
+
+-- Duty points: -1 for each duty an invigilator misses through a confirmed absence, +1 for each
+-- duty covered for a colleague. Rows are only ever added, so the history explains every total,
+-- and they outlive restarts, recomputes and new imports.
+CREATE TABLE IF NOT EXISTS duty_point (
+    id               IDENTITY PRIMARY KEY,
+    faculty_id       VARCHAR(40)  NOT NULL,
+    faculty_name     VARCHAR(120) NOT NULL,
+    points           INT          NOT NULL,
+    reason           VARCHAR(300) NOT NULL,
+    leave_request_id BIGINT,
+    recorded_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_duty_point_faculty ON duty_point (faculty_id);

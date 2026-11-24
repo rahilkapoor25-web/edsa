@@ -8,11 +8,8 @@
     <section class="hero hero--short">
         <div class="shell">
             <p class="hero__eyebrow">Examination office</p>
-            <h1 class="hero__title">Load the workbook, pick the mode, compute the timetable.</h1>
-            <p class="hero__lead">
-                The selected mode decides how long every paper runs, and the timetable is rebuilt
-                around it: start and end times, parallel rooms, seating and invigilation duties.
-            </p>
+            <h1 class="hero__title">Plan an exam session</h1>
+            <p class="hero__lead">Upload the workbook, pick a mode, generate the schedule.</p>
         </div>
     </section>
 
@@ -20,45 +17,23 @@
 
         <p class="notice notice--error" th:if="${error}" th:text="${error}">Something went wrong</p>
 
-        <section class="panel" th:if="${report}">
+        <p class="notice notice--success" th:if="${report != null and report.successful()}">
+            <strong>Schedule generated</strong> for
+            <span th:text="${report.students()}">0</span> students and
+            <span th:text="${report.exams()}">0</span> papers.
+            <a href="#timetable">View timetable</a>
+        </p>
+
+        <section class="panel" th:if="${report != null and !report.successful()}">
             <div class="panel__head">
-                <h2 class="panel__title">Workbook import</h2>
-                <span class="badge" th:classappend="${report.successful()} ? 'badge--pass' : 'badge--fail'"
-                      th:text="${report.successful()} ? 'Imported' : 'Rejected'">Imported</span>
+                <h2 class="panel__title">Workbook not imported</h2>
+                <span class="badge badge--fail">Rejected</span>
             </div>
             <div class="panel__body">
-                <dl class="figures" th:if="${report.successful()}">
-                    <div class="figure">
-                        <dt class="label">Students</dt>
-                        <dd class="figure__value mono" th:text="${report.students()}">0</dd>
-                    </div>
-                    <div class="figure">
-                        <dt class="label">Faculty</dt>
-                        <dd class="figure__value mono" th:text="${report.faculty()}">0</dd>
-                    </div>
-                    <div class="figure">
-                        <dt class="label">Rooms</dt>
-                        <dd class="figure__value mono" th:text="${report.rooms()}">0</dd>
-                    </div>
-                    <div class="figure">
-                        <dt class="label">Subjects</dt>
-                        <dd class="figure__value mono" th:text="${report.subjects()}">0</dd>
-                    </div>
-                    <div class="figure">
-                        <dt class="label">Enrollments</dt>
-                        <dd class="figure__value mono" th:text="${report.enrollments()}">0</dd>
-                    </div>
-                    <div class="figure">
-                        <dt class="label">Exams</dt>
-                        <dd class="figure__value mono" th:text="${report.exams()}">0</dd>
-                    </div>
-                </dl>
-                <div th:unless="${report.successful()}">
-                    <p class="muted">Nothing was imported. The database is unchanged.</p>
-                    <ul class="problems">
-                        <li th:each="problem : ${report.errors()}" th:text="${problem}">Worksheet error</li>
-                    </ul>
-                </div>
+                <p class="muted">Nothing was changed. Fix these and try again:</p>
+                <ul class="problems">
+                    <li th:each="problem : ${report.errors()}" th:text="${problem}">Worksheet error</li>
+                </ul>
             </div>
         </section>
 
@@ -66,22 +41,22 @@
             <article class="card">
                 <span class="label">Students</span>
                 <span class="stat__value" th:text="${studentCount}">0</span>
-                <p class="stat__note">registered candidates</p>
+                <p class="stat__note">registered</p>
             </article>
             <article class="card">
                 <span class="label">Rooms</span>
                 <span class="stat__value" th:text="${roomCount}">0</span>
-                <p class="stat__note"><span class="mono" th:text="${seatCount}">0</span> seats available</p>
+                <p class="stat__note"><span class="mono" th:text="${seatCount}">0</span> seats</p>
             </article>
             <article class="card">
                 <span class="label">Faculty</span>
                 <span class="stat__value" th:text="${facultyCount}">0</span>
-                <p class="stat__note">available to invigilate</p>
+                <p class="stat__note">invigilators</p>
             </article>
             <article class="card">
                 <span class="label">Exams</span>
                 <span class="stat__value" th:text="${examCount}">0</span>
-                <p class="stat__note">papers to schedule</p>
+                <p class="stat__note">papers</p>
             </article>
         </section>
 
@@ -91,78 +66,92 @@
 
             <section class="panel">
                 <div class="panel__head">
-                    <h2 class="panel__title">1 · Data</h2>
+                    <h2 class="panel__title">1 · Workbook</h2>
                     <span class="label" th:text="${hasData} ? 'Loaded' : 'Nothing loaded'">Nothing loaded</span>
                 </div>
                 <div class="panel__body">
-                    <h3 class="subhead">Upload Excel workbook</h3>
-                    <p class="muted">
-                        One <span class="mono">.xlsx</span> file with the Students, Faculty, Rooms,
-                        Subjects, Enrollments and Exams worksheets.
+                    <p class="loaded" th:if="${hasData}">
+                        Using <strong th:text="${source != null} ? ${source} : 'the loaded data'">session.xlsx</strong>.
+                        Choose another workbook below to replace it.
                     </p>
-                    <form method="post" th:action="@{/data/workbook}" enctype="multipart/form-data"
-                          data-confirm="Importing replaces every stored student, faculty member, room, subject, enrollment and exam. Continue?"
-                          data-busy="Importing...">
+                    <p class="sheets">
+                        <span class="label">Needs six sheets</span>
+                        <span class="code">Students</span> <span class="code">Faculty</span>
+                        <span class="code">Rooms</span> <span class="code">Subjects</span>
+                        <span class="code">Enrollments</span> <span class="code">Exams</span>
+                    </p>
+
+                    <!-- The script below checks the chosen file and enables Generate schedule only
+                         when it passes. The server validates it again on submit regardless. -->
+                    <form id="workbook-form" method="post" th:action="@{/data/workbook}" enctype="multipart/form-data"
+                          th:data-check="@{/data/workbook/check}"
+                          th:data-confirm="${storedData or hasData} ? 'Generating replaces the data loaded now. Continue?'"
+                          data-busy="Generating...">
                         <div class="field">
-                            <label class="label" for="workbook">Workbook</label>
+                            <label class="label" for="workbook">Excel workbook (.xlsx)</label>
                             <input class="input input--file" type="file" id="workbook" name="workbook" accept=".xlsx">
                         </div>
-                        <button class="button button--full" type="submit">Import workbook</button>
+                        <div class="check" id="workbook-check" role="status" aria-live="polite" hidden></div>
+                        <button class="button button--full" type="submit">Generate schedule</button>
                     </form>
-                    <div class="actions">
-                        <a class="button button--quiet" th:href="@{/import-template.xlsx}">Download Excel template</a>
+
+                    <div class="more">
+                        <a th:href="@{/import-template.xlsx}">Download template</a>
+                        <button class="link" type="button" popovertarget="csv-upload">Upload CSV files</button>
+                        <form method="post" th:action="@{/data/sample}"
+                              data-confirm="Replace the loaded session with the sample data?">
+                            <button class="link" type="submit">Load sample data</button>
+                        </form>
                         <form method="post" th:action="@{/data/stored}" th:if="${storedData}">
-                            <button class="button button--quiet" type="submit">Use imported data</button>
+                            <button class="link" type="submit">Use imported data</button>
                         </form>
                     </div>
 
-                    <p class="or">or</p>
-
-                    <h3 class="subhead">Legacy CSV upload</h3>
-                    <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data"
-                          data-confirm="Uploading replaces the session currently loaded. Continue?"
-                          data-busy="Uploading...">
-                        <div class="field">
-                            <label class="label" for="students">Students CSV</label>
-                            <input class="input input--file" type="file" id="students" name="students" accept=".csv">
+                    <div class="sheet" id="csv-upload" popover>
+                        <div class="sheet__head">
+                            <h2 class="sheet__title">Upload CSV files</h2>
+                            <button class="sheet__close" type="button" popovertarget="csv-upload"
+                                    popovertargetaction="hide" aria-label="Close">&times;</button>
                         </div>
-                        <div class="field">
-                            <label class="label" for="rooms">Rooms CSV</label>
-                            <input class="input input--file" type="file" id="rooms" name="rooms" accept=".csv">
-                        </div>
-                        <div class="field">
-                            <label class="label" for="faculty">Faculty CSV</label>
-                            <input class="input input--file" type="file" id="faculty" name="faculty" accept=".csv">
-                        </div>
-                        <div class="field">
-                            <label class="label" for="timetable">Timetable CSV</label>
-                            <input class="input input--file" type="file" id="timetable" name="timetable" accept=".csv">
-                        </div>
-                        <button class="button button--quiet button--full" type="submit">Upload the four CSV files</button>
-                    </form>
-
-                    <p class="or">or</p>
-
-                    <form method="post" th:action="@{/data/sample}"
-                          data-confirm="This replaces the session currently loaded with the sample data. Continue?"
-                          data-busy="Loading...">
-                        <button class="button button--quiet button--full" type="submit">
-                            Load the bundled sample data
-                        </button>
-                    </form>
+                        <p class="muted">The older format: four files instead of one workbook.</p>
+                        <form method="post" th:action="@{/data/upload}" enctype="multipart/form-data"
+                              data-confirm="Uploading replaces the loaded session. Continue?"
+                              data-busy="Uploading...">
+                            <div class="field">
+                                <label class="label" for="students">Students</label>
+                                <input class="input input--file" type="file" id="students" name="students" accept=".csv">
+                            </div>
+                            <div class="field">
+                                <label class="label" for="rooms">Rooms</label>
+                                <input class="input input--file" type="file" id="rooms" name="rooms" accept=".csv">
+                            </div>
+                            <div class="field">
+                                <label class="label" for="faculty">Faculty</label>
+                                <input class="input input--file" type="file" id="faculty" name="faculty" accept=".csv">
+                            </div>
+                            <div class="field">
+                                <label class="label" for="timetable">Timetable</label>
+                                <input class="input input--file" type="file" id="timetable" name="timetable" accept=".csv">
+                            </div>
+                            <button class="button button--full" type="submit">Upload CSV files</button>
+                        </form>
+                    </div>
                 </div>
             </section>
 
             <section class="panel">
                 <div class="panel__head">
-                    <h2 class="panel__title">2 · Mode and compute</h2>
-                    <span class="label" th:text="${hasPlan} ? 'Plan ready' : 'Not computed'">Not computed</span>
+                    <h2 class="panel__title">2 · Exam mode</h2>
+                    <span class="label" th:text="${hasPlan} ? 'Plan ready' : 'No plan yet'">No plan yet</span>
                 </div>
                 <div class="panel__body">
 
-                    <form class="modes" method="post" th:action="@{/mode}" data-busy="Re-timing...">
-                        <fieldset class="modes__set">
-                            <legend class="label">Exam mode</legend>
+                    <!-- Locked until a verified workbook is loaded: applying a mode reloads the page,
+                         which would throw away a workbook chosen but not yet generated. -->
+                    <form class="modes" id="mode-form" method="post" th:action="@{/mode}" data-busy="Re-timing..."
+                          th:data-ready="${hasData}">
+                        <fieldset class="modes__set" th:disabled="${!hasData}">
+                            <legend class="visually-hidden">Exam mode</legend>
                             <label class="mode" th:each="option : ${modes}"
                                    th:classappend="${option == mode} ? 'mode--chosen'">
                                 <input type="radio" name="mode" th:value="${option.name()}"
@@ -172,41 +161,23 @@
                                       th:text="${option.durationLabel()}">2 h</span>
                             </label>
                         </fieldset>
-                        <button class="button button--quiet button--full" type="submit">Use this mode</button>
+                        <button class="button button--quiet button--full" type="submit"
+                                th:disabled="${!hasData}">Apply mode</button>
                     </form>
-
-                    <p class="muted mode__current">
-                        Selected: <strong th:text="${mode.label()}">Endsem</strong>,
-                        <strong th:text="${mode.durationLabel()}">3 h</strong> per paper<span
-                            th:if="${mode.allowsDurationOverride()}"> unless a paper sets its own
-                        length</span>. The mode decides every start and end time.
+                    <p class="muted mode__hint" id="mode-pending" hidden>
+                        Generate the chosen workbook first. Changing the mode now would discard it.
                     </p>
 
                     <p class="notice" th:if="${ignoredOverrides != null and !#lists.isEmpty(ignoredOverrides)}">
+                        The workbook sets its own length for
                         <span th:text="${#lists.size(ignoredOverrides)}">1</span>
-                        <span th:text="${#lists.size(ignoredOverrides) == 1} ? 'paper declares' : 'papers declare'">papers declare</span>
-                        a length this mode does not accept, so
-                        <strong th:text="${mode.durationLabel()}">10 min</strong> is used instead:
-                        <span th:each="ignored, state : ${ignoredOverrides}">
-                            <span th:text="${ignored}">CS301 (E1) declares 90 minutes</span><span
-                                th:unless="${state.last}">; </span>
-                        </span>
+                        <span th:text="${#lists.size(ignoredOverrides) == 1} ? 'paper' : 'papers'">papers</span>;
+                        every paper runs <strong th:text="${mode.durationLabel()}">3 h</strong> in this mode.
                     </p>
 
-                    <p class="muted" th:unless="${hasData}">
-                        Load the data first. The scheduler needs students, rooms, faculty and exams.
+                    <p class="muted mode__hint" th:unless="${hasData}">
+                        Generate a schedule first, then change the mode here.
                     </p>
-
-                    <p class="muted" th:if="${hasData}">
-                        The timetable is built as soon as data is imported, and rebuilt when the mode
-                        changes. Recompute only if you want to run the scheduler again.
-                    </p>
-
-                    <form method="post" th:action="@{/compute}" th:if="${hasData}"
-                          data-confirm="Recomputing builds the plan again and discards any absence cover already applied to it. Continue?"
-                          data-busy="Computing...">
-                        <button class="button button--quiet button--full" type="submit">Recompute</button>
-                    </form>
 
                     <div th:if="${hasPlan}">
                         <dl class="figures">
@@ -248,19 +219,24 @@
                         </table>
 
                         <div th:unless="${usable}" class="problems-block">
-                            <p class="notice notice--error">
-                                This plan is not usable. Nothing below is presented as a finished timetable.
-                            </p>
+                            <p class="notice notice--error">This plan is not usable yet:</p>
                             <ul class="problems">
                                 <li th:each="problem : ${problems}" th:text="${problem}">Reason</li>
                             </ul>
                         </div>
 
-                        <div class="actions" th:if="${usable}">
-                            <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
-                            <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
-                            <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
-                            <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
+                        <div class="actions">
+                            <th:block th:if="${usable}">
+                                <a class="button button--quiet button--small" th:href="@{/rooms}">Room schedule</a>
+                                <a class="button button--quiet button--small" th:href="@{/workloads}">Workloads</a>
+                                <a class="button button--quiet button--small" th:href="@{/exam-plan.xlsx}">Excel</a>
+                                <a class="button button--quiet button--small" th:href="@{/seating-plan.csv}">CSV</a>
+                            </th:block>
+                            <form method="post" th:action="@{/compute}"
+                                  data-confirm="Recomputing rebuilds the plan and drops any absence cover applied to it. Continue?"
+                                  data-busy="Computing...">
+                                <button class="button button--quiet button--small" type="submit">Recompute</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -275,30 +251,22 @@
                     Endsem · 3 h</span>
             </div>
             <div class="panel__body">
-                <p class="muted">
-                    The examination office sets the data and the mode. Your duties are on
-                    <a th:href="@{/workloads}">Workloads</a>, the seating is on
-                    <a th:href="@{/rooms}">Room schedule</a>, and you can report an absence on
-                    <a th:href="@{/disruption}">Disruption</a>.
-                </p>
+                <p class="muted">Set by the examination office. Your duties, seating and leave are linked below.</p>
                 <div class="actions">
                     <a class="button button--quiet" th:href="@{/rooms}">Room schedule</a>
                     <a class="button button--quiet" th:href="@{/workloads}">Workloads</a>
+                    <a class="button button--quiet" th:href="@{/disruption}">Report an absence</a>
                     <a class="button button--quiet" th:href="@{/exam-plan.xlsx}">Download Excel</a>
-                    <a class="button button--quiet" th:href="@{/seating-plan.csv}">CSV</a>
                 </div>
             </div>
         </section>
 
         <section class="card empty" th:if="${!hasPlan and !canChangeData}">
-            <h2 class="empty__title">Nothing has been planned yet</h2>
-            <p class="empty__note">
-                The examination office has not imported this session's data yet. Once they have,
-                your duties and the seating plan appear here.
-            </p>
+            <h2 class="empty__title">Nothing planned yet</h2>
+            <p class="empty__note">Your duties and seating appear here once the schedule is generated.</p>
         </section>
 
-        <section class="panel" th:if="${hasPlan}">
+        <section class="panel" id="timetable" th:if="${hasPlan}">
             <div class="panel__head">
                 <h2 class="panel__title">Timetable</h2>
                 <span class="label" th:text="${mode.label()} + ' · ' + ${mode.durationLabel()}">
@@ -335,6 +303,104 @@
         </section>
 
     </div>
+
+    <!--/* Checks the chosen workbook straight away and enables Generate schedule only when it
+         passes. Without JavaScript the button stays enabled and the server's own validation
+         on submit is the check. A template-only comment, so it never reaches a professor. */-->
+    <script th:if="${canChangeData}">
+        (function () {
+            var form = document.getElementById('workbook-form');
+            if (!form || !window.fetch || !window.FormData) {
+                return;
+            }
+            var input = form.querySelector('input[type="file"]');
+            var button = form.querySelector('button[type="submit"]');
+            var status = document.getElementById('workbook-check');
+            var modeForm = document.getElementById('mode-form');
+            var modePending = document.getElementById('mode-pending');
+            var latest = 0;
+            button.disabled = true;
+
+            // A chosen-but-not-generated workbook locks the mode, which would reload the page and lose it.
+            function lockMode(pending) {
+                var ready = modeForm.getAttribute('data-ready') === 'true';
+                modeForm.querySelector('fieldset').disabled = pending || !ready;
+                modeForm.querySelector('button[type="submit"]').disabled = pending || !ready;
+                modePending.hidden = !(pending && ready);
+            }
+
+            function show(kind, title, items) {
+                status.hidden = false;
+                status.className = 'check check--' + kind;
+                status.textContent = '';
+                var head = document.createElement('p');
+                head.className = 'check__title';
+                head.textContent = title;
+                status.appendChild(head);
+                if (items && items.length) {
+                    var list = document.createElement('ul');
+                    list.className = 'check__list';
+                    items.forEach(function (text) {
+                        var item = document.createElement('li');
+                        item.textContent = text;
+                        list.appendChild(item);
+                    });
+                    status.appendChild(list);
+                }
+            }
+
+            function check() {
+                button.disabled = true;
+                var file = input.files && input.files[0];
+                lockMode(!!file);
+                if (!file) {
+                    status.hidden = true;
+                    return;
+                }
+                var mine = ++latest;
+                show('busy', 'Checking ' + file.name + '…');
+                var body = new FormData();
+                body.append('workbook', file);
+                body.append('_csrf', form.querySelector('input[name="_csrf"]').value);
+                fetch(form.getAttribute('data-check'), {
+                    method: 'POST', body: body, credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                }).then(function (report) {
+                    if (mine !== latest) {
+                        return;
+                    }
+                    if (report.successful) {
+                        show('pass', 'Ready to generate', [
+                            report.students + ' students · ' + report.faculty + ' faculty · ' + report.rooms + ' rooms',
+                            report.subjects + ' subjects · ' + report.enrollments + ' enrollments · ' + report.exams + ' exams'
+                        ]);
+                        button.disabled = false;
+                    } else {
+                        var errors = report.errors || [];
+                        var shown = errors.slice(0, 6);
+                        if (errors.length > shown.length) {
+                            shown.push('…and ' + (errors.length - shown.length) + ' more');
+                        }
+                        show('fail', errors.length === 1 ? '1 problem to fix' : errors.length + ' problems to fix', shown);
+                    }
+                }).catch(function () {
+                    if (mine === latest) {
+                        show('fail', 'The workbook could not be checked. Choose it again to retry.');
+                    }
+                });
+            }
+
+            input.addEventListener('change', check);
+            if (input.files && input.files.length) {
+                check();
+            }
+        })();
+    </script>
 
 </main>
 

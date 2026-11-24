@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -104,8 +105,11 @@ public final class TimetableScheduler {
                 continue;
             }
 
+            // A room is busy until its sitting ends and it has been turned round for the next.
             Set<String> busyRooms = new HashSet<>();
-            clashing.forEach(slot -> busyRooms.addAll(roomsBySlot.getOrDefault(slot.getId(), List.of())));
+            placed.stream()
+                    .filter(slot -> candidate.overlaps(slot, config.turnaroundMinutes()))
+                    .forEach(slot -> busyRooms.addAll(roomsBySlot.getOrDefault(slot.getId(), List.of())));
 
             List<String> reserved = reserveRooms(cohort.size(), largestFirst, busyRooms, data);
             if (reserved == null) {
@@ -113,10 +117,12 @@ public final class TimetableScheduler {
                 continue;
             }
 
-            int invigilatorsBusy = busyRooms.size();
-            if (invigilatorsBusy + reserved.size() > data.faculty().size()) {
-                lastReason = "only " + data.faculty().size() + " invigilators exist and "
-                        + (invigilatorsBusy + reserved.size()) + " rooms would be running at " + start;
+            int roomsRunning = reserved.size() + clashing.stream()
+                    .mapToInt(slot -> roomsBySlot.getOrDefault(slot.getId(), List.of()).size())
+                    .sum();
+            String shortfall = staffingShortfall(exam, start, roomsRunning, reserved.size(), data);
+            if (shortfall != null) {
+                lastReason = shortfall;
                 continue;
             }
 
@@ -127,6 +133,42 @@ public final class TimetableScheduler {
         }
         return exam.getSubjectCode() + " (" + exam.getId() + ") could not be scheduled on " + exam.getDate()
                 + (lastReason == null ? "" : ": " + lastReason);
+    }
+
+    /**
+     * Whether the staff exist for every room running at that time: two invigilators per room, a
+     * Professor in each, and — for this paper — enough of both from outside its own department.
+     *
+     * <p>shortcut: counts heads rather than solving who goes where, so two papers whose
+     * departments exclude each other's staff can still pass here; the allocator then reports any
+     * room it cannot staff. Upgrade to a matching if real sessions hit that.
+     */
+    private String staffingShortfall(Exam exam, LocalTime start, int roomsRunning, int rooms, ExamData data) {
+        int perRoom = SchedulingConfig.INVIGILATORS_PER_ROOM;
+        long professors = data.faculty().stream().filter(Faculty::isSenior).count();
+        if (data.faculty().size() < perRoom * roomsRunning) {
+            return "only " + data.faculty().size() + " invigilators exist and the " + roomsRunning
+                    + " rooms running at " + start + " need " + perRoom * roomsRunning;
+        }
+        if (professors < roomsRunning) {
+            return "only " + professors + " Professors exist and each of the " + roomsRunning
+                    + " rooms running at " + start + " needs one";
+        }
+        String department = exam.getDepartment();
+        if (department == null) {
+            return null;
+        }
+        List<Faculty> eligible = data.faculty().stream().filter(member -> !member.belongsTo(department)).toList();
+        long eligibleProfessors = eligible.stream().filter(Faculty::isSenior).count();
+        if (eligibleProfessors < rooms) {
+            return "only " + eligibleProfessors + " Professors outside " + department
+                    + " may invigilate it and its " + rooms + " rooms need one each";
+        }
+        if (eligible.size() < perRoom * rooms) {
+            return "only " + eligible.size() + " invigilators outside " + department
+                    + " may invigilate it and its " + rooms + " rooms need " + perRoom * rooms;
+        }
+        return null;
     }
 
     /**
@@ -145,6 +187,7 @@ public final class TimetableScheduler {
                 .forEach(slot -> {
                     starts.add(slot.getStartTime());
                     starts.add(slot.getEndTime());
+                    starts.add(slot.getEndTime().plusMinutes(config.turnaroundMinutes()));
                 });
         return starts.stream().filter(start -> !start.isBefore(config.dayStart())).toList();
     }
@@ -161,14 +204,29 @@ public final class TimetableScheduler {
         return null;
     }
 
-    /** Enough free rooms, largest first, to hold the cohort — or null when they do not exist. */
+    /**
+     * The smallest free room that seats the cohort spaced out, else the smallest that seats it
+     * at all, so the big rooms stay free for papers running alongside. Only a cohort no single
+     * room holds is split, across the largest free rooms first. Null when even that fails.
+     */
     private List<String> reserveRooms(int cohortSize, List<Room> largestFirst, Set<String> busyRooms, ExamData data) {
+        List<Room> free = largestFirst.stream().filter(room -> !busyRooms.contains(room.getId())).toList();
+        Comparator<Room> smallestFirst = Comparator
+                .comparingInt((Room room) -> data.capacityOf(room.getId(), config))
+                .thenComparing(Room::getId);
+        Optional<Room> single = free.stream()
+                .filter(room -> data.spacedCapacityOf(room.getId(), config) >= cohortSize)
+                .min(smallestFirst)
+                .or(() -> free.stream()
+                        .filter(room -> data.capacityOf(room.getId(), config) >= cohortSize)
+                        .min(smallestFirst));
+        if (single.isPresent()) {
+            return List.of(single.get().getId());
+        }
+
         List<String> reserved = new ArrayList<>();
         int seats = 0;
-        for (Room room : largestFirst) {
-            if (busyRooms.contains(room.getId())) {
-                continue;
-            }
+        for (Room room : free) {
             reserved.add(room.getId());
             seats += data.capacityOf(room.getId(), config);
             if (seats >= cohortSize) {

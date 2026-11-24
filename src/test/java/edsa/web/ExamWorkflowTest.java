@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -102,6 +103,49 @@ class ExamWorkflowTest {
 
         assertTrue(workspace.hasData());
         assertEquals(3, workspace.data().students().size());
+        // The page says which workbook is in use, so a reload never looks like it vanished.
+        mvc.perform(get("/")).andExpect(content().string(containsString("session.xlsx")));
+    }
+
+    @Test
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
+    void theModeIsLockedUntilAWorkbookHasBeenImported() throws Exception {
+        workspace.setData(null);
+
+        mvc.perform(get("/"))
+                .andExpect(content().string(containsString("Generate a schedule first")));
+
+        workspace.setData(edsa.data.SampleData.load());
+
+        mvc.perform(get("/"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Generate a schedule first"))));
+    }
+
+    @Test
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
+    void checkingAWorkbookReportsItIsReadyWithoutLoadingIt() throws Exception {
+        MockMultipartFile upload = new MockMultipartFile("workbook", "session.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", edsa.data.ExcelTemplate.write());
+        var before = workspace.data();
+
+        mvc.perform(multipart("/data/workbook/check").file(upload).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successful").value(true))
+                .andExpect(jsonPath("$.students").value(3))
+                .andExpect(jsonPath("$.exams").value(3));
+
+        assertTrue(before == workspace.data(), "a check must not load or plan anything");
+    }
+
+    @Test
+    @WithMockUser(username = "admin@thapar.edu", roles = "ADMIN")
+    void checkingSomethingThatIsNotAWorkbookSaysWhy() throws Exception {
+        MockMultipartFile upload = new MockMultipartFile("workbook", "notes.txt", "text/plain", "hello".getBytes());
+
+        mvc.perform(multipart("/data/workbook/check").file(upload).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successful").value(false))
+                .andExpect(jsonPath("$.errors[0]").value(containsString(".xlsx")));
     }
 
     @Test

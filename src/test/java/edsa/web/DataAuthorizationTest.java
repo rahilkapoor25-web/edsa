@@ -87,6 +87,13 @@ class DataAuthorizationTest {
 
     @Test
     @WithMockUser(username = "prof@thapar.edu", roles = "PROFESSOR")
+    void aProfessorCannotCheckAWorkbook() throws Exception {
+        mvc.perform(multipart("/data/workbook/check").file(anXlsx()).with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "prof@thapar.edu", roles = "PROFESSOR")
     void aProfessorCannotUploadTheCsvFiles() throws Exception {
         ExamData before = workspace.data();
 
@@ -150,7 +157,7 @@ class DataAuthorizationTest {
                 .andExpect(status().isOk())
                 // Hiding these is for clarity; the refusals above are what enforce it.
                 .andExpect(content().string(Matchers.not(Matchers.containsString("/data/workbook"))))
-                .andExpect(content().string(Matchers.not(Matchers.containsString("Import workbook"))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("Generate schedule"))))
                 .andExpect(content().string(Matchers.containsString("This session")));
     }
 
@@ -182,7 +189,7 @@ class DataAuthorizationTest {
         mvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString("/data/workbook")))
-                .andExpect(content().string(Matchers.containsString("Import workbook")));
+                .andExpect(content().string(Matchers.containsString("Generate schedule")));
     }
 
     // ── Signed out ───────────────────────────────────────────────────────────────────────

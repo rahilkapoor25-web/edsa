@@ -2,6 +2,7 @@ package edsa.web;
 
 import edsa.core.Absence;
 import edsa.core.AbsenceWindow;
+import edsa.core.DutyPoint;
 import edsa.core.ExamPlan;
 import edsa.core.Faculty;
 import edsa.core.LeaveRequest;
@@ -10,6 +11,7 @@ import edsa.core.RepairResult;
 import edsa.core.AbsenceRepairer;
 import edsa.auth.AccountService;
 import edsa.auth.AppUser;
+import edsa.data.DutyPointRepository;
 import edsa.data.LeaveRequestRepository;
 
 import java.time.LocalDateTime;
@@ -41,14 +43,16 @@ public class LeaveWorkflow {
     private final Workspace workspace;
     private final LeaveProperties properties;
     private final AccountService accounts;
+    private final DutyPointRepository points;
     private final AbsenceRepairer repairer = new AbsenceRepairer();
 
     public LeaveWorkflow(LeaveRequestRepository requests, Workspace workspace,
-                         LeaveProperties properties, AccountService accounts) {
+                         LeaveProperties properties, AccountService accounts, DutyPointRepository points) {
         this.requests = requests;
         this.workspace = workspace;
         this.properties = properties;
         this.accounts = accounts;
+        this.points = points;
     }
 
     /**
@@ -196,6 +200,8 @@ public class LeaveWorkflow {
                 decidedBy, summarise(repair))) {
             throw new IllegalArgumentException("That request has already been decided");
         }
+        // In the same transaction: the points stand or fall with the confirmation itself.
+        points.record(id, DutyPoint.earnedBy(plan, request.window(), repair));
 
         if (repair.changedAnything() || !repair.isComplete()) {
             workspace.applyRepair(repair);

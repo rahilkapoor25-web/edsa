@@ -67,6 +67,12 @@ public final class ExamData {
         return examsById.get(id);
     }
 
+    /** The department of the paper sat as that exam, or null when the data does not say. */
+    public String departmentOf(String examId) {
+        Exam exam = examsById.get(examId);
+        return exam == null ? null : exam.getDepartment();
+    }
+
     /** Everyone registered for one paper, in id order so the same input gives the same output. */
     public List<Student> studentsFor(String subjectCode) {
         return students.stream()
@@ -98,5 +104,31 @@ public final class ExamData {
             return 0;
         }
         return room.capacity() > 0 ? room.capacity() : config.fallbackRoomCapacity();
+    }
+
+    /**
+     * How many a room seats with candidates spaced out on a checkerboard, so nobody has another
+     * candidate beside, in front of or behind them. Grid positions past its capacity do not count.
+     */
+    public int spacedCapacityOf(String roomId, SchedulingConfig config) {
+        Room room = roomsById.get(roomId);
+        if (room == null) {
+            return 0;
+        }
+        int capacity = capacityOf(roomId, config);
+        int seats = 0;
+        for (int row = 1; row <= room.getRowCount(); row++) {
+            for (int column = 1; column <= room.getColumnCount(); column++) {
+                if (isSpacedSeat(row, column) && (row - 1) * room.getColumnCount() + column <= capacity) {
+                    seats++;
+                }
+            }
+        }
+        return seats;
+    }
+
+    /** The checkerboard: row 1 uses seats 1, 3, 5…, row 2 uses seats 2, 4, 6…. */
+    public static boolean isSpacedSeat(int row, int column) {
+        return (row + column) % 2 == 0;
     }
 }

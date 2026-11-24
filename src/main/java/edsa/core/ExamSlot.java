@@ -74,9 +74,19 @@ public final class ExamSlot {
      * be in both. Touching intervals do not overlap.
      */
     public boolean overlaps(ExamSlot other) {
+        return overlaps(other, 0);
+    }
+
+    /**
+     * True when the two sittings are less than {@code gapMinutes} apart on the same day — a
+     * room needs that long to be cleared and set out again before its next sitting.
+     */
+    public boolean overlaps(ExamSlot other, int gapMinutes) {
+        int start = startTime.toSecondOfDay() / 60;
+        int otherStart = other.startTime.toSecondOfDay() / 60;
         return date.equals(other.date)
-                && startTime.isBefore(other.getEndTime())
-                && other.startTime.isBefore(getEndTime());
+                && start < otherStart + other.durationMinutes + gapMinutes
+                && otherStart < start + durationMinutes + gapMinutes;
     }
 
     @Override

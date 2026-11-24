@@ -257,7 +257,8 @@ class DutySearchTest {
         ExamData data = new ExamData(
                 TestData.students("S", 4, "CS301"),
                 TestData.rooms(1, 10),
-                List.of(member("F01", "Dr. Aman Verma", "CSE", true)),
+                List.of(member("F01", "Dr. Aman Verma", "CSE", true),
+                        member("F02", "Dr. Bina Rao", "ECE", false)),
                 List.of(new Exam("E1", "CS301", "Data Structures", TestData.DAY, LocalTime.of(9, 0), null)));
 
         FacultyDuty asMidsem = planner.plan(data, ExamMode.MIDSEM).plan()

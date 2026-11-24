@@ -62,7 +62,7 @@ class ConstraintTest {
         seating.place("E1", new Seat("R1", 1, 1, "S1"));
         seating.place("E2", new Seat("R1", 1, 2, "S2"));
 
-        List<String> breaches = new RoomOverlapConstraint().breaches(
+        List<String> breaches = new RoomOverlapConstraint(CONFIG).breaches(
                 plan(List.of(slot("E1", "CS301", 9, 120), slot("E2", "EC301", 10, 60)), seating, new DutyRoster()));
 
         assertEquals(1, breaches.size());
@@ -70,13 +70,26 @@ class ConstraintTest {
     }
 
     @Test
-    void roomOverlapAllowsAroomReusedAfterTheFirstSittingEnds() {
+    void roomOverlapAllowsAroomReusedAfterItsTurnaround() {
         SeatingPlan seating = new SeatingPlan();
         seating.place("E1", new Seat("R1", 1, 1, "S1"));
         seating.place("E2", new Seat("R1", 1, 2, "S2"));
 
-        assertTrue(new RoomOverlapConstraint().isSatisfied(
-                plan(List.of(slot("E1", "CS301", 9, 60), slot("E2", "EC301", 10, 60)), seating, new DutyRoster())));
+        assertTrue(new RoomOverlapConstraint(CONFIG).isSatisfied(
+                plan(List.of(slot("E1", "CS301", 9, 60), slot("E2", "EC301", 11, 60)), seating, new DutyRoster())));
+    }
+
+    @Test
+    void roomOverlapCatchesARoomReusedBeforeItsTurnaround() {
+        SeatingPlan seating = new SeatingPlan();
+        seating.place("E1", new Seat("R1", 1, 1, "S1"));
+        seating.place("E2", new Seat("R1", 1, 2, "S2"));
+
+        List<String> breaches = new RoomOverlapConstraint(CONFIG).breaches(
+                plan(List.of(slot("E1", "CS301", 9, 60), slot("E2", "EC301", 10, 60)), seating, new DutyRoster()));
+
+        assertEquals(1, breaches.size());
+        assertTrue(breaches.get(0).contains("30-minute turnaround"), breaches.get(0));
     }
 
     @Test
@@ -144,11 +157,15 @@ class ConstraintTest {
         seating.place("E1", new Seat("R1", 1, 1, "S1"));
         seating.place("E1", new Seat("R1", 1, 2, "S2"));
         seating.place("E1", new Seat("R1", 2, 1, "S3"));
+        // Properly staffed — a Professor and a junior — so the over-full room is the only breach.
+        DutyRoster staffed = new DutyRoster();
+        staffed.assign(new Assignment("E1", "R1", "F1"));
+        staffed.assign(new Assignment("E1", "R1", "F2"));
 
         List<CheckResult> results = PlanChecker.using(CONFIG)
-                .inspect(plan(List.of(slot("E1", "CS301", 9, 120)), seating, new DutyRoster()));
+                .inspect(plan(List.of(slot("E1", "CS301", 9, 120)), seating, staffed));
 
-        assertEquals(5, results.size());
+        assertEquals(8, results.size());
         assertEquals(1, results.stream().filter(result -> !result.satisfied()).count());
         assertEquals("Room capacity",
                 results.stream().filter(result -> !result.satisfied()).findFirst().orElseThrow().constraintName());

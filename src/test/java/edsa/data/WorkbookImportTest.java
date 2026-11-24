@@ -47,13 +47,191 @@ class WorkbookImportTest {
         return imports.importWorkbook("session.xlsx", workbook.length, new ByteArrayInputStream(workbook));
     }
 
+    private ImportReport checkOf(byte[] workbook) {
+        return imports.check("session.xlsx", workbook.length, new ByteArrayInputStream(workbook));
+    }
+
+    // ── The validity check behind the Generate schedule button ───────────────────────────
+
+    @Test
+    void checkingAValidWorkbookPassesAndStoresNothing() {
+        ImportReport report = checkOf(WorkbookBuilder.valid().build());
+
+        assertTrue(report.successful(), String.valueOf(report.errors()));
+        assertEquals(3, report.students());
+        assertEquals(2, report.exams());
+        assertFalse(repository.hasData(), "a check must never write");
+    }
+
+    @Test
+    void checkingRefusesWhatAnImportWouldRefuse() {
+        ImportReport report = checkOf(WorkbookBuilder.valid().without("Rooms").build());
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().stream().anyMatch(error -> error.contains("Rooms")), String.valueOf(report.errors()));
+    }
+
+    @Test
+    void aWorkbookWithNoAvailableRoomCannotBeScheduled() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Rooms", List.of("Room ID", "Name", "Building", "Capacity", "Available"),
+                        List.of(List.of("R101", "Hall One", "Block A", "30", "no")))
+                .build();
+
+        ImportReport report = checkOf(workbook);
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().stream().anyMatch(error -> error.contains("No room")), String.valueOf(report.errors()));
+    }
+
+    @Test
+    void aWorkbookWithNoAvailableInvigilatorCannotBeScheduled() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Post", "Available"),
+                        List.of(List.of("F01", "Faculty One", "f1@example.edu", "CSE", "Professor", "no")))
+                .build();
+
+        ImportReport report = checkOf(workbook);
+
+        assertFalse(report.successful());
+        assertTrue(report.errors().stream().anyMatch(error -> error.contains("invigilate")), String.valueOf(report.errors()));
+    }
+
+    // ── Rules taken from the reference sample workbook ───────────────────────────────────
+
+    private static final List<String> EXAM_COLUMNS =
+            List.of("Exam ID", "Subject Code", "Date", "Start Time", "Duration Minutes");
+    private static final List<String> STUDENT_COLUMNS =
+            List.of("Student ID", "Name", "Email", "Department", "Year", "Section");
+
+    private static void assertRefusedFor(ImportReport report, String... fragments) {
+        assertFalse(report.successful(), "expected a refusal");
+        assertTrue(report.errors().stream().anyMatch(error -> List.of(fragments).stream().allMatch(error::contains)),
+                "no error mentions " + List.of(fragments) + " in " + report.errors());
+    }
+
+    @Test
+    void everyExamNeedsAStartTime() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Exams", EXAM_COLUMNS, List.of(
+                        List.of("E1", "CS301", "2026-11-10", "09:00", ""),
+                        List.of("E2", "EC301", "2026-11-10", "", "")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "Exams", "row 3", "Start Time", "required");
+    }
+
+    @Test
+    void theExamsSheetNeedsAStartTimeColumn() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Exams", List.of("Exam ID", "Subject Code", "Date"), List.of(
+                        List.of("E1", "CS301", "2026-11-10"),
+                        List.of("E2", "EC301", "2026-11-10")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "Exams", "Start Time");
+    }
+
+    @Test
+    void aStudentEmailThatIsFilledInMustBeAnEmailAddress() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Students", STUDENT_COLUMNS, List.of(
+                        List.of("S001", "Example One", "not-an-address", "CSE", "3", "A"),
+                        List.of("S002", "Example Two", "s2@example.edu", "CSE", "3", "A"),
+                        List.of("S003", "Example Three", "s3@example.edu", "ECE", "3", "B")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "Students", "Email", "not-an-address");
+    }
+
+    @Test
+    void studentEmailYearAndSectionMayStillBeLeftBlank() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Students", STUDENT_COLUMNS, List.of(
+                        List.of("S001", "Example One", "", "CSE", "", ""),
+                        List.of("S002", "Example Two", "", "CSE", "", ""),
+                        List.of("S003", "Example Three", "", "ECE", "", "")))
+                .build();
+
+        ImportReport report = checkOf(workbook);
+
+        assertTrue(report.successful(), String.valueOf(report.errors()));
+    }
+
+    @Test
+    void aYearThatIsFilledInMustBeAWholeNumber() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Students", STUDENT_COLUMNS, List.of(
+                        List.of("S001", "Example One", "s1@example.edu", "CSE", "third", "A"),
+                        List.of("S002", "Example Two", "s2@example.edu", "CSE", "3", "A"),
+                        List.of("S003", "Example Three", "s3@example.edu", "ECE", "3", "B")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "Students", "Year", "third");
+    }
+
+    @Test
+    void aSubjectIsExaminedOnlyOnce() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Exams", EXAM_COLUMNS, List.of(
+                        List.of("E1", "CS301", "2026-11-10", "09:00", ""),
+                        List.of("E2", "EC301", "2026-11-10", "09:00", ""),
+                        List.of("E9", "CS301", "2026-11-12", "09:00", "")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "Exams", "E9", "CS301", "E1");
+    }
+
+    @Test
+    void everyStudentIsEnrolledInSomething() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Enrollments", List.of("Student ID", "Subject Code"),
+                        List.of(List.of("S001", "CS301"), List.of("S003", "EC301")))
+                .build();
+
+        assertRefusedFor(checkOf(workbook), "S002", "not enrolled");
+    }
+
+    @Test
+    void anExamLargerThanEveryAvailableSeatIsRefused() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Rooms", List.of("Room ID", "Name", "Building", "Capacity", "Available"), List.of(
+                        List.of("R101", "Hall One", "Block A", "1", "yes"),
+                        List.of("R102", "Hall Two", "Block A", "40", "no")))
+                .build();
+
+        // CS301 has two students and only one available seat exists.
+        assertRefusedFor(checkOf(workbook), "CS301", "2 students", "1");
+    }
+
+    @Test
+    void aPaperNobodyIsEnrolledForIsRefusedByTheCheckAndTheImport() {
+        byte[] workbook = WorkbookBuilder.valid()
+                .replace("Subjects", List.of("Subject Code", "Subject Name", "Department", "Semester"),
+                        List.of(List.of("CS301", "Data Structures", "CSE", "5"),
+                                List.of("EC301", "Signals", "ECE", "5"),
+                                List.of("ME301", "Thermodynamics", "ME", "5")))
+                .replace("Exams", List.of("Exam ID", "Subject Code", "Date", "Start Time", "Duration Minutes"),
+                        List.of(List.of("E1", "CS301", "2026-11-10", "09:00", ""),
+                                List.of("E3", "ME301", "2026-11-11", "09:00", "")))
+                .build();
+
+        ImportReport checked = checkOf(workbook);
+
+        assertFalse(checked.successful());
+        assertTrue(checked.errors().stream().anyMatch(error -> error.contains("E3") && error.contains("ME301")),
+                String.valueOf(checked.errors()));
+        assertFalse(importOf(workbook).successful());
+        assertFalse(repository.hasData(), "a refused import leaves the database empty");
+    }
+
     @Test
     void importsEveryWorksheetAndReportsTheCounts() {
         ImportReport report = importOf(WorkbookBuilder.valid().build());
 
         assertTrue(report.successful(), String.valueOf(report.errors()));
         assertEquals(3, report.students());
-        assertEquals(3, report.faculty());
+        assertEquals(5, report.faculty());
         assertEquals(2, report.rooms());
         assertEquals(2, report.subjects());
         assertEquals(3, report.enrollments());
@@ -68,7 +246,7 @@ class WorkbookImportTest {
         PlanningResult result = new ExamPlanner().plan(data, ExamMode.MIDSEM);
 
         assertEquals(3, data.students().size());
-        assertEquals(2, data.faculty().size(), "the unavailable member is left out of the pool");
+        assertEquals(4, data.faculty().size(), "the unavailable member is left out of the pool");
         assertTrue(result.isUsable(), String.valueOf(result.problems()));
         assertEquals(120, result.plan().schedule().get(0).getDurationMinutes());
     }
@@ -147,8 +325,8 @@ class WorkbookImportTest {
     @Test
     void refusesAnExamForAnUnknownSubject() {
         ImportReport report = importOf(WorkbookBuilder.valid()
-                .replace("Exams", List.of("Exam ID", "Subject Code", "Date"),
-                        List.of(List.of("E1", "ZZ999", "2026-11-10")))
+                .replace("Exams", List.of("Exam ID", "Subject Code", "Date", "Start Time"),
+                        List.of(List.of("E1", "ZZ999", "2026-11-10", "09:00")))
                 .build());
 
         assertFalse(report.successful());
@@ -160,8 +338,8 @@ class WorkbookImportTest {
     @Test
     void refusesAnUnreadableDate() {
         ImportReport report = importOf(WorkbookBuilder.valid()
-                .replace("Exams", List.of("Exam ID", "Subject Code", "Date"),
-                        List.of(List.of("E1", "CS301", "10-11-2026")))
+                .replace("Exams", List.of("Exam ID", "Subject Code", "Date", "Start Time"),
+                        List.of(List.of("E1", "CS301", "10-11-2026", "09:00")))
                 .build());
 
         assertFalse(report.successful());
@@ -212,6 +390,9 @@ class WorkbookImportTest {
                         List.of(List.of("S001", "Only One", "CSE")))
                 .replace("Enrollments", List.of("Student ID", "Subject Code"),
                         List.of(List.of("S001", "CS301")))
+                // Every paper needs candidates, so the now-empty EC301 paper goes too.
+                .replace("Exams", List.of("Exam ID", "Subject Code", "Date", "Start Time", "Duration Minutes"),
+                        List.of(List.of("E1", "CS301", "2026-11-10", "09:00", "")))
                 .build());
 
         assertTrue(second.successful(), String.valueOf(second.errors()));
@@ -230,10 +411,24 @@ class WorkbookImportTest {
 
     // ── The Faculty worksheet's Email column ─────────────────────────────────────────────
 
-    /** The valid workbook with its Faculty worksheet replaced. */
+    /** Staff from a third department, so either paper can always be given its Professor and partner. */
+    private static final List<List<String>> SUPPORTING_STAFF = List.of(
+            List.of("F90", "Support Professor", "f90@example.edu", "ME", "Professor", "yes"),
+            List.of("F91", "Support Junior One", "f91@example.edu", "ME", "Assistant Professor", "yes"),
+            List.of("F92", "Support Junior Two", "f92@example.edu", "ME", "Assistant Professor", "yes"));
+
+    /**
+     * The valid workbook with its Faculty worksheet replaced: the given rows (id, name, email,
+     * department, available) become Professors, followed by the supporting staff.
+     */
     private static byte[] withFacultyRows(java.util.List<java.util.List<String>> rows) {
+        List<List<String>> all = new java.util.ArrayList<>();
+        for (List<String> row : rows) {
+            all.add(List.of(row.get(0), row.get(1), row.get(2), row.get(3), "Professor", row.get(4)));
+        }
+        all.addAll(SUPPORTING_STAFF);
         return WorkbookBuilder.valid()
-                .replace("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Available"), rows)
+                .replace("Faculty", List.of("Faculty ID", "Name", "Email", "Department", "Post", "Available"), all)
                 .build();
     }
 
@@ -244,7 +439,7 @@ class WorkbookImportTest {
         assertTrue(report.successful(), String.valueOf(report.errors()));
         assertEquals("f1@example.edu", jdbc.queryForObject(
                 "SELECT email FROM faculty WHERE id = 'F01'", String.class));
-        assertEquals(3, repository.facultyContacts().size(),
+        assertEquals(5, repository.facultyContacts().size(),
                 "an unavailable member still needs to be able to sign in");
         assertTrue(repository.facultyContacts().stream().allMatch(FacultyContact::hasEmail));
     }
@@ -264,7 +459,7 @@ class WorkbookImportTest {
                 List.of("F01", "Faculty One", "", "CSE", "yes"))));
 
         assertTrue(report.successful(), String.valueOf(report.errors()));
-        assertEquals(1, report.faculty());
+        assertEquals(1 + SUPPORTING_STAFF.size(), report.faculty());
         FacultyContact stored = repository.facultyContacts().get(0);
         assertFalse(stored.hasEmail(), "they simply cannot be given an account");
     }
@@ -305,8 +500,11 @@ class WorkbookImportTest {
     @Test
     void aWorkbookWithoutAnEmailColumnStillImports() {
         ImportReport report = importOf(WorkbookBuilder.valid()
-                .replace("Faculty", List.of("Faculty ID", "Name", "Department", "Available"),
-                        List.of(List.of("F01", "Faculty One", "CSE", "yes")))
+                .replace("Faculty", List.of("Faculty ID", "Name", "Department", "Post", "Available"),
+                        List.of(List.of("F01", "Faculty One", "CSE", "Professor", "yes"),
+                                List.of("F90", "Support Professor", "ME", "Professor", "yes"),
+                                List.of("F91", "Support Junior One", "ME", "Assistant Professor", "yes"),
+                                List.of("F92", "Support Junior Two", "ME", "Assistant Professor", "yes")))
                 .build());
 
         assertTrue(report.successful(), String.valueOf(report.errors()));

@@ -3,6 +3,7 @@ package edsa.data;
 import edsa.core.Exam;
 import edsa.core.ExamMode;
 import edsa.core.Faculty;
+import edsa.core.Post;
 import edsa.core.Room;
 import edsa.core.Student;
 import edsa.core.Subject;
@@ -50,11 +51,11 @@ public final class ExcelWorkbookReader {
 
     private static final Map<String, List<String>> REQUIRED_COLUMNS = Map.of(
             STUDENTS, List.of("Student ID", "Name", "Department"),
-            FACULTY, List.of("Faculty ID", "Name", "Department"),
+            FACULTY, List.of("Faculty ID", "Name", "Department", "Post"),
             ROOMS, List.of("Room ID", "Building", "Capacity"),
             SUBJECTS, List.of("Subject Code", "Subject Name", "Department"),
             ENROLLMENTS, List.of("Student ID", "Subject Code"),
-            EXAMS, List.of("Exam ID", "Subject Code", "Date"));
+            EXAMS, List.of("Exam ID", "Subject Code", "Date", "Start Time"));
 
     /** Permissive but structural: a local part, an @, a dotted domain. */
     private static final java.util.regex.Pattern EMAIL =
@@ -165,6 +166,7 @@ public final class ExcelWorkbookReader {
         if (columns == null) {
             return students;
         }
+        Map<String, String> emailOwners = new LinkedHashMap<>();
         for (Row row : dataRows(sheet)) {
             String id = required(sheet, row, columns, "Student ID");
             String name = required(sheet, row, columns, "Name");
@@ -175,6 +177,12 @@ public final class ExcelWorkbookReader {
             if (students.containsKey(id)) {
                 error(sheet, row, "Student ID", "'" + id + "' appears more than once");
                 continue;
+            }
+            // Optional, but checked when filled in, as on the reference sample workbook.
+            readEmail(sheet, row, columns, emailOwners, id);
+            String year = optional(row, columns, "Year");
+            if (year != null && !year.isBlank() && !year.trim().matches("[1-9][0-9]*")) {
+                error(sheet, row, "Year", "'" + year.trim() + "' is not a whole number");
             }
             students.put(id, new Student(id, name, department, Set.of()));
         }
@@ -193,7 +201,14 @@ public final class ExcelWorkbookReader {
             String id = required(sheet, row, columns, "Faculty ID");
             String name = required(sheet, row, columns, "Name");
             String department = required(sheet, row, columns, "Department");
-            if (id == null || name == null || department == null) {
+            String postText = required(sheet, row, columns, "Post");
+            if (id == null || name == null || department == null || postText == null) {
+                continue;
+            }
+            Post post = Post.of(postText);
+            if (post == null) {
+                error(sheet, row, "Post", "'" + postText.trim() + "' is not a post (use Professor, "
+                        + "Associate Professor or Assistant Professor)");
                 continue;
             }
             if (!seen.add(id)) {
@@ -201,7 +216,7 @@ public final class ExcelWorkbookReader {
                 continue;
             }
             String email = readEmail(sheet, row, columns, emailOwners, id);
-            faculty.add(new Faculty(id, name, department, false, Set.of()));
+            faculty.add(new Faculty(id, name, department, post));
             availability.put(id, readAvailability(sheet, row, columns, "Available"));
             if (email != null) {
                 emails.put(id, email);
@@ -217,7 +232,7 @@ public final class ExcelWorkbookReader {
      * account would later be created from it.
      */
     private String readEmail(Sheet sheet, Row row, Map<String, Integer> columns,
-                             Map<String, String> emailOwners, String facultyId) {
+                             Map<String, String> emailOwners, String ownerId) {
         String value = optional(row, columns, "Email");
         if (value == null || value.isBlank()) {
             return null;
@@ -227,7 +242,7 @@ public final class ExcelWorkbookReader {
             error(sheet, row, "Email", "'" + value.trim() + "' is not an email address");
             return null;
         }
-        String owner = emailOwners.putIfAbsent(email, facultyId);
+        String owner = emailOwners.putIfAbsent(email, ownerId);
         if (owner != null) {
             error(sheet, row, "Email", "'" + email + "' is already used by " + owner);
             return null;
@@ -331,6 +346,7 @@ public final class ExcelWorkbookReader {
             return exams;
         }
         Set<String> seen = new HashSet<>();
+        Map<String, String> examOfSubject = new LinkedHashMap<>();
         for (Row row : dataRows(sheet)) {
             String id = required(sheet, row, columns, "Exam ID");
             String subjectCode = required(sheet, row, columns, "Subject Code");
@@ -346,11 +362,18 @@ public final class ExcelWorkbookReader {
                 error(sheet, row, "Subject Code", "'" + subjectCode + "' is not listed on the Subjects worksheet");
                 continue;
             }
-            LocalDate date = readDate(sheet, row, columns);
-            if (date == null) {
+            // Every candidate for a subject sits its one paper; a second exam would seat them twice.
+            String earlier = examOfSubject.putIfAbsent(subjectCode, id);
+            if (earlier != null) {
+                error(sheet, row, "Subject Code", "'" + id + "' is a second exam for " + subjectCode
+                        + ", which " + earlier + " already examines");
                 continue;
             }
+            LocalDate date = readDate(sheet, row, columns);
             LocalTime start = readTime(sheet, row, columns);
+            if (date == null || start == null) {
+                continue;
+            }
             Integer duration = null;
             String minutes = optional(row, columns, "Duration Minutes");
             if (minutes != null && !minutes.isBlank()) {
@@ -370,7 +393,7 @@ public final class ExcelWorkbookReader {
                     continue;
                 }
             }
-            exams.add(new Exam(id, subjectCode, subject.name(), date, start, duration));
+            exams.add(new Exam(id, subjectCode, subject.name(), date, start, duration, subject.department()));
         }
         return exams;
     }
@@ -397,9 +420,11 @@ public final class ExcelWorkbookReader {
         }
     }
 
+    /** Required, as on the reference sample workbook: every paper has a fixed start. */
     private LocalTime readTime(Sheet sheet, Row row, Map<String, Integer> columns) {
         Cell cell = cellOf(row, columns, "Start Time");
         if (cell == null) {
+            error(sheet, row, "Start Time", "is required (use hh:mm)");
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
@@ -407,6 +432,7 @@ public final class ExcelWorkbookReader {
         }
         String text = text(cell);
         if (text == null || text.isBlank()) {
+            error(sheet, row, "Start Time", "is required (use hh:mm)");
             return null;
         }
         try {

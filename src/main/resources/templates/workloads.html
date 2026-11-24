@@ -35,7 +35,7 @@
                         <th>Invigilator</th>
                         <th>Id</th>
                         <th>Department</th>
-                        <th>Seniority</th>
+                        <th>Post</th>
                         <th class="is-numeric">Duties</th>
                         <th>Slots</th>
                     </tr>
@@ -45,7 +45,10 @@
                         <td class="is-primary" th:text="${workload.member().getName()}">Dr. Meera Nair</td>
                         <td><span class="code" th:text="${workload.member().getId()}">F01</span></td>
                         <td th:text="${workload.member().getDepartment()}">CSE</td>
-                        <td th:text="${workload.member().isSenior()} ? 'Senior' : 'Junior'">Senior</td>
+                        <td>
+                            <span th:text="${workload.member().getPostLabel()}">Professor</span>
+                            <span class="badge badge--pass" th:if="${workload.member().isSenior()}">Senior</span>
+                        </td>
                         <td class="is-numeric" th:text="${workload.duties()}">1</td>
                         <td>
                             <span class="muted" th:if="${#lists.isEmpty(workload.slots())}">none</span>
